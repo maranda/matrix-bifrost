@@ -620,6 +620,7 @@ export class XmppJsGateway implements IGateway {
                     kick.from = member.anonymousJid.toString();
                     kick.to = device;
                     this.xmpp.xmppWriteToStream(kick);
+                    this.members.removeXmppMember(chatName, member.realJid);
                 }
             }
         }
