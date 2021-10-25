@@ -616,7 +616,7 @@ export class XmppJsGateway implements IGateway {
         for (const chatName of this.members.getMembershipRooms()) {
             for (const member of this.members.getXmppMembers(chatName)) {
                 for (let device of member.devices) {
-                    kick.from = member.anonymousJid;
+                    kick.from = member.anonymousJid.toString();
                     kick.to = device;
                     this.xmpp.xmppWriteToStream(kick);
                 }
