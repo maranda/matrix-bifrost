@@ -606,4 +606,21 @@ export class XmppJsGateway implements IGateway {
         }
         return false;
     }
+
+    public stopGateway() {
+        let kick = new StzaPresenceKick("", "");
+        kick.reason = "Bridge is shutting down";
+        kick.statusCodes.add(XMPPStatusCode.SelfPresence);
+        kick.statusCodes.add(XMPPStatusCode.SelfKicked);
+        kick.statusCodes.add(XMPPStatusCode.SelfKickedShutdown);
+        for (const chatName of this.members.getMembershipRooms()) {
+            for (const member of this.members.getXmppMembers(chatName)) {
+                for (let device of member.devices) {
+                    kick.from = member.anonymousJid;
+                    kick.to = device;
+                    this.xmpp.xmppWriteToStream(kick);
+                }
+            }
+        }
+    }
 }

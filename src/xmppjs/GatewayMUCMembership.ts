@@ -54,6 +54,10 @@ export class GatewayMUCMembership {
         this.members = new Map();
     }
 
+    public getMembershipRooms() {
+        return this.members.keys();
+    }
+
     public hasMembershipForRoom(chatName: string) {
         return this.members.has(chatName);
     }

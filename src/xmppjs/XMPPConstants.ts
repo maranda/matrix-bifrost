@@ -6,6 +6,7 @@ export enum XMPPStatusCode {
     RoomNowNonAnonymous = "172",
     SelfBanned = "301",
     SelfKicked = "307",
+    SelfKickedShutdown = "332",
     SelfKickedTechnical = "333",
 }
 

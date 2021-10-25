@@ -218,6 +218,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     }
 
     public async close() {
+        await this.xmppGateway.stopGateway();
         await this.xmpp?.stop();
     }
 
