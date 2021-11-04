@@ -13,6 +13,8 @@ import { ProtoHacks } from "./ProtoHacks";
 
 const log = Logging.get("GatewayHandler");
 
+const HISTORY_SAFE_ENUMS = ['shared', 'world_readable'];
+
 /**
  * Responsible for handling querys & events on behalf of a gateway style bridge.
  * The gateway system in the bridge is complex, so pull up a a pew and let's dig in.
@@ -71,10 +73,11 @@ export class GatewayHandler {
         }
         const promise = (async () => {
             log.debug(`Getting state for ${roomId}`);
-            const state = await intent.roomState(roomId, false);
+            const state = await intent.roomState(roomId);
             log.debug(`Got state for ${roomId}`);
             const nameEv = state.find((e) => e.type === "m.room.name");
             const topicEv = state.find((e) => e.type === "m.room.topic");
+            const historyVis = state.find((e) => e.type === "m.room.history_visibility");
             const bot = this.bridge.getBot();
             let membership = state.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
                 {
@@ -88,6 +91,8 @@ export class GatewayHandler {
             ))
             membership = await this.populateAvatarHashes(roomId, membership, intent);
             const room: IGatewayRoom = {
+                // Default to private
+                allowHistory: HISTORY_SAFE_ENUMS.includes(historyVis?.content?.history_visibility || 'joined'),
                 name: nameEv ? nameEv.content.name : "",
                 topic: topicEv ? topicEv.content.topic : "",
                 roomId,
