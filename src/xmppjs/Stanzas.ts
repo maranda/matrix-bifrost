@@ -383,10 +383,21 @@ export class StzaIqDiscoItems extends StzaIqDisco {
     }
 
     get queryContent(): string {
-        const items = this.items.map((item) =>
-            `<item jid='${encode(item.jid)}' name='${encode(item.name)}'/>`,
-        ).join("");
-        return items;
+        if (this.queryType === "jabber:iq:search") {
+            let data = `<x xmlns='jabber:x:data' type ='result'>`
+                + `<field type='hidden' var='FORM_TYPE'><value>jabber:iq:search</value></field>`
+                + `<reported><field var='name' label='Name' type='text-single'/></reported>`;
+            this.items.map((item) =>
+                data += `<item jid='${encode(item.jid)}'><field var='name' label='Name' type='text-single'><value>${encode(item.name)}</value></field></item>`
+            );
+            data += `</x>`;
+            return data;
+        } else {
+            const items = this.items.map((item) =>
+                `<item jid='${encode(item.jid)}' name='${encode(item.name)}'/>`,
+            ).join("");
+            return items;
+        }
     }
 
     public addItem(jid: string, name: string) {
