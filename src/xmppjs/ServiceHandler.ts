@@ -183,13 +183,21 @@ export class ServiceHandler {
                 return;
             } else if (type === "set") {
                 // Searching via a term.
-                const term = searchElement.getChild("Term");
-                if (term) {
-                    searchString = term.text();
+                const form = searchElement.getChildByAttr("xmlns", "jabber:x:data");
+                if (!form) {
+                    log.warn(`Failed to search rooms: form is missing/invalid`);
+                    await this.xmpp.xmppSend(new SztaIqError(from, to, id, "modify", 400, "bad-request", undefined,
+                        "Request form is invalid"));
+                    return;
                 }
-                const hServer = searchElement.getChild("Homeserver");
+
+                const term = form.getChildByAttr("var", "term");
+                if (term) {
+                    searchString = term.getChildText("value");
+                }
+                const hServer = form.getChildByAttr("var", "homeserver");
                 if (hServer) {
-                    homeserver = hServer.text();
+                    homeserver = hServer.getChildText("value");
                 }
             } else {
                 // Not sure what to do with this.

@@ -451,10 +451,11 @@ export class StzaIqSearchFields extends StzaBase {
     get queryContent(): string { return ""; }
 
     get xml(): string {
-        const fields = Object.keys(this.fields).map((field) => `<${field}>${this.fields[field]}</${field}>`).join("");
+        const fields = Object.keys(this.fields).map((field) => `<field type='text-single' label='${field}' var='${field.toLowerCase()}'><value>${this.fields[field]}</value></field>`).join("");
         return `<iq from='${this.from}' to='${this.to}' id='${this.id}' type='result' xml:lang='en'>`
         + `<query xmlns='jabber:iq:search'><instructions>${encode(this.instructions)}</instructions>`
-        + `${fields}</query></iq>`;
+        + `<x xmlns='jabber:x:data' type='form'><field type='hidden' var='FORM_TYPE'><value>jabber:iq:search</value></field>`
+        + `${fields}</x></query></iq>`;
     }
 }
 
