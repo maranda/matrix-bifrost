@@ -173,13 +173,14 @@ export class ServiceHandler {
                         from,
                         to,
                         id,
-                        "Please enter a searh term to find Matrix rooms:",
+                        "Please enter a search term to find Matrix rooms:",
                         {
                             Term: "",
                             Homeserver: this.bridgeConfig.domain,
                         },
                     ),
                 );
+                return;
             } else if (type === "set") {
                 // Searching via a term.
                 const term = searchElement.getChild("Term");
