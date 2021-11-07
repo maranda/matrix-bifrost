@@ -976,7 +976,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
 
         if (delta.changed.includes("kick")) {
             log.info("Got kick for user");
-            this.emit(delta.status!.ours ? "chat-kick" : "chat-user-kick", {
+            this.emit((delta.status && delta.status!.ours) ? "chat-kick" : "chat-user-kick", {
                 conv: {
                     name: convName,
                 },
