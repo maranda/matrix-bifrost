@@ -59,6 +59,11 @@ export class XmppJsAccount implements IBifrostAccount {
                             this.lastStanzaTs.set(roomName, Date.now());
                             return;
                         }
+                        // make really sure the handle is not null
+                        if (!this.roomHandles.has(roomName)) {
+                            log.warn(`${this.remoteId} has no handler for ${roomName}`);
+                            return;
+                        }
                         this.joinChat({
                             fullRoomName: roomName,
                             handle: this.roomHandles.get(roomName)!,
