@@ -386,9 +386,10 @@ export class StzaIqDiscoItems extends StzaIqDisco {
         if (this.queryType === "jabber:iq:search") {
             let data = `<x xmlns='jabber:x:data' type ='result'>`
                 + `<field type='hidden' var='FORM_TYPE'><value>jabber:iq:search</value></field>`
-                + `<reported><field var='name' label='Name' type='text-single'/></reported>`;
+                + `<reported><field var='address' label='MUC Address' type='text-single'/><field var='name' label='Name' type='text-single'/></reported>`;
             this.items.map((item) =>
-                data += `<item jid='${encode(item.jid)}'><field var='name' label='Name' type='text-single'><value>${encode(item.name)}</value></field></item>`
+                data += `<item jid='${encode(item.jid)}'><field var='address' label='MUC Address' type='text-single'><value>${encode(item.jid)}</value></field>`
+                + `<field var='name' label='Name' type='text-single'><value>${encode(item.name)}</value></field></item>`
             );
             data += `</x>`;
             return data;
