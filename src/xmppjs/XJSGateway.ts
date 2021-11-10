@@ -60,7 +60,7 @@ export class XmppJsGateway implements IGateway {
             return;
         }
         const to = jid(stanza.attrs.to);
-        const convName = `${to.local}@${to.domain}`;
+        const convName = (to.local !== "") ? `${to.local}@${to.domain}` : `${to.domain}`;
         const isMucType = stanza.getChildByAttr("xmlns", "http://jabber.org/protocol/muc");
         log.info(`Handling ${stanza.name} from=${stanza.attrs.from} to=${stanza.attrs.to} for ${gatewayAlias}`);
         if ((delta.changed.includes("online") || delta.changed.includes("newdevice")) && isMucType) {
@@ -68,14 +68,14 @@ export class XmppJsGateway implements IGateway {
             // Gateways are special.
             // We also want to drop the resource from the sender.
             const from = jid(stanza.attrs.from);
-            const sender = `${from.local}@${from.domain}`;
+            const sender = (from.local !== "") ? `${from.local}@${from.domain}` : `${from.domain}`;
             this.xmpp.emit("gateway-joinroom", {
                 join_id: stanza.attrs.id,
                 roomAlias: gatewayAlias,
                 sender,
                 nick: to.resource,
                 protocol_id: XMPP_PROTOCOL.id,
-                room_name: `${to.local}@${to.domain}`,
+                room_name: convName,
             } as IGatewayJoin);
         } else if (delta.changed.includes("offline")) {
             const wasKicked = delta.status!.kick;
@@ -245,7 +245,7 @@ export class XmppJsGateway implements IGateway {
 
     public reflectPM(stanza: Element) {
         const to = jid(stanza.attrs.to);
-        const convName = `${to.local}@${to.domain}`;
+        const convName = (to.local !== "") ? `${to.local}@${to.domain}` : `${to.domain}`;
         // This is quite easy..
         const sender = this.members.getXmppMemberByRealJid(convName, stanza.attrs.from);
         if (!sender) {
@@ -298,7 +298,7 @@ export class XmppJsGateway implements IGateway {
 
     public getMxidForRemote(sender: string) {
         const j = jid(sender);
-        const username = `${j.local}@${j.domain}`;
+        const username = (j.local !== "") ? `${j.local}@${j.domain}` : `${j.domain}`;
         return XMPP_PROTOCOL.getMxIdForProtocol(username, this.config.domain, this.config.userPrefix).getId();
     }
 
