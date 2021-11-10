@@ -638,7 +638,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 from = jid(`${from.local}@${from.domain}`);
             } else {
                 // This is a PM, then.
-                convName = `${to.local}@${to.domain}`;
+                convName = (to.local !== "") ? `${to.local}@${to.domain}` : `${to.domain}`;
                 const userId = this.gateway!.getMatrixIDForJID(convName, to);
                 if (userId) {
                     // This is a PM *to* matrix
