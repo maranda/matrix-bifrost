@@ -598,7 +598,7 @@ export class XmppJsGateway implements IGateway {
     public maskPMSenderRecipient(senderMxid: string, recipientJid: string)
         : {recipient: string, sender: string}|undefined {
         const j = jid(recipientJid);
-        const convName = `${j.local}@${j.domain}`;
+        const convName = (j.local !== "") ? `${j.local}@${j.domain}` : `${j.domain}`;
         log.info("Looking up possible gateway:", senderMxid, recipientJid, convName);
         const recipient = this.members.getMemberByAnonJid<IGatewayMemberXmpp>(convName, recipientJid);
         if (!recipient) {

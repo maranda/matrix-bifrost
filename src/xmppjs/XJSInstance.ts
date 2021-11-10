@@ -387,15 +387,19 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         // This is for GHOST accts
         const uName = Util.unescapeUserId(new MatrixUser(mxid, {}, false).localpart);
         const rPrefix = prefix ? `(${prefix})` : "";
-        const match = (new RegExp(`^${rPrefix}(.+\/)?(.+)?@(.+)$`)).exec(uName);
+        let match = (new RegExp(`^${rPrefix}(.+\/)?(.+)?@(.+)$`)).exec(uName);
         if (!match) {
-            throw Error("Username didn't match");
+            match = (new RegExp(`^${rPrefix}(.+\/)?([^@]+)$`)).exec(uName);
+            if (!match) {
+                throw Error("Username didn't match");
+            }
         }
         const resource = match[2] ? match[2].substr(
             0, match[2].length - "/".length) : "";
         const localpart = match[3] ? match[3] : "";
         const domain = match[4];
-        const username = `${localpart}@${domain}${resource ? "/" + resource : ""}`;
+        const username =
+            domain ? `${localpart}@${domain}${resource ? "/" + resource : ""}` : `${localpart}${resource ? "/" + resource : ""}`;
         return {username, protocol: XMPP_PROTOCOL};
     }
 
