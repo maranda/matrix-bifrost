@@ -654,7 +654,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                         log.warn(`No account defined for ${userId}, registering new account.`);
                         localAcct = await this.autoRegister!.registerUser(XMPP_PROTOCOL.id, userId) as XmppJsAccount;
                     }
-                    const anonJid = this.gateway!.getAnonIDForJID(`${to.local}@${to.domain}`, from);
+                    const anonJid = this.gateway!.getAnonIDForJID(convName, from);
                     if (anonJid) {
                         from = jid(anonJid);
                     } else {
@@ -701,7 +701,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         } else if (!localAcct && alias) {
             // This is a gateway, so setup a fake account.
             localAcct = {
-                remoteId: `${to!.local}@${to!.domain}`,
+                remoteId: (to!.local !== "") ? `${to!.local}@${to!.domain}` : `${to!.domain}`,
             } as any;
         }
 
