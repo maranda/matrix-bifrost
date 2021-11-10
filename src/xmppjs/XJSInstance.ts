@@ -208,7 +208,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
 
     public isWaitingToJoin(j: JID): string|undefined {
         for (const acct of this.accounts.values()) {
-            if (acct.waitingToJoin.has(`${j.local}@${j.domain}`)) {
+            if (acct.waitingToJoin.has(Util.prepJID(j))) {
                 return acct.remoteId + "/" + acct.resource;
             }
         }
@@ -319,7 +319,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     }
 
     public getAccountForJid(aJid: JID): {mxId: string}|undefined {
-        const gatewayMxid = this.gateway?.getMatrixIDForJID(`${aJid.local}@${aJid.domain}`, aJid);
+        const gatewayMxid = this.gateway?.getMatrixIDForJID(Util.prepJID(aJid), aJid);
         if (gatewayMxid) {
             return {mxId: gatewayMxid};
         }
@@ -474,7 +474,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     public async getVCard(who: string, sender?: string): Promise<Element> {
         const id = uuid();
         const whoJid = jid(who);
-        who = `${whoJid.local}@${whoJid.domain}`;
+        who = Util.prepJID(whoJid);
         let mucExists = this.checkMUCCache.get(who);
         if (!mucExists && !this.checkMUCCache.has(who)) {
             mucExists = await this.checkGroupExists({
@@ -488,7 +488,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                     log.info(`Checking if ${username} is in ${who}`);
                     if (account.isInRoom(who)) {
                         sender = username + "/" + this.defaultRes;
-                        who = `${whoJid.local}@${whoJid.domain}/${whoJid.resource}`;
+                        who = `${Util.prepJID(whoJid)}/${whoJid.resource}`;
                         log.info(`Sending IQ from ${username}`);
                         break;
                     }
@@ -620,16 +620,16 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             return;
         }
         const to = jid(stanza.attrs.to)!;
-        let localAcct: any = this.accounts.get(`${to!.local}@${to!.domain}`)!;
+        let localAcct: any = this.accounts.get(Util.prepJID(to!))!;
         let from = jid(stanza.attrs.from);
-        let convName = `${from.local}@${from.domain}`;
+        let convName = Util.prepJID(from);
 
         if (alias) {
             // If this is an alias, we want to do some gateway related things.
             if (!to.resource) {
                 // Group message to a MUC, so reflect it to other XMPP users
                 // and set the right to/from addresses.
-                convName = `${to.local}@${to.domain}`;
+                convName = Util.prepJID(to);
                 log.info(`Sending gateway group message to ${convName}`);
                 if (!(await this.gateway!.reflectXMPPMessage(convName, stanza))) {
                     log.warn(`Message could not be sent, not forwarding to Matrix`);
@@ -637,10 +637,10 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 }
                 // We deliberately do not anonymize the JID here.
                 // We do however strip the resource
-                from = jid(`${from.local}@${from.domain}`);
+                from = jid(Util.prepJID(from));
             } else {
                 // This is a PM, then.
-                convName = (to.local !== "") ? `${to.local}@${to.domain}` : `${to.domain}`;
+                convName = Util.prepJID(to);
                 const userId = this.gateway!.getMatrixIDForJID(convName, to);
                 if (userId) {
                     // This is a PM *to* matrix
@@ -703,7 +703,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         } else if (!localAcct && alias) {
             // This is a gateway, so setup a fake account.
             localAcct = {
-                remoteId: (to!.local !== "") ? `${to!.local}@${to!.domain}` : `${to!.domain}`,
+                remoteId: Util.prepJID(to!),
             } as any;
         }
 
@@ -885,7 +885,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             log.debug(`Emitting IM message (isMucPM:${isMucPm})`, message);
             this.emit("received-im-msg", {
                 eventName: "received-im-msg",
-                sender: isMucPm ? from.toString() : `${from.local}@${from.domain}`,
+                sender: isMucPm ? from.toString() : Util.prepJID(from),
                 message,
                 account: {
                     protocol_id: XMPP_PROTOCOL.id,
@@ -898,9 +898,9 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     private handlePresenceStanza(stanza: Element, gatewayAlias: string|null) {
         const to = jid(stanza.getAttr("to"));
         // XMPP is case insensitive.
-        const localAcct = this.accounts.get(`${to.local}@${to.domain}`);
+        const localAcct = this.accounts.get(Util.prepJID(to));
         const from = jid(stanza.getAttr("from"));
-        const convName = `${from.local}@${from.domain}`;
+        const convName = Util.prepJID(from);
         const delta = this.presenceCache.add(stanza);
 
         if (!delta) {

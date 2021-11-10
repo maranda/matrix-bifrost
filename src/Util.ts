@@ -1,5 +1,6 @@
 import { IChatJoinProperties } from "./bifrost/Events";
 import { Intent, WeakEvent } from "matrix-appservice-bridge";
+import { JID } from "@xmpp/jid";
 import * as crypto from "crypto";
 
 export class Util {
@@ -75,5 +76,9 @@ export class Util {
 
     public static sha1(data: string): string {
         return crypto.createHash("sha1").update(data, "ascii").digest("hex");
+    }
+
+    public static prepJID(j: JID): string {
+        return (j.local !== "") ? `${j.local}@${j.domain}` : `${j.domain}`;
     }
 }

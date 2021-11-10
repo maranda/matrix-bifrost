@@ -25,6 +25,7 @@ import { AutoRegistration } from "../AutoRegistration";
 import { GatewayStateResolve } from "./GatewayStateResolve";
 import { MatrixMembershipEvent } from "../MatrixTypes";
 import { IHistoryLimits, HistoryManager, MemoryStorage } from "./HistoryManager";
+import { Util } from "../Util";
 
 const log = Logging.get("XmppJsGateway");
 
@@ -60,7 +61,7 @@ export class XmppJsGateway implements IGateway {
             return;
         }
         const to = jid(stanza.attrs.to);
-        const convName = (to.local !== "") ? `${to.local}@${to.domain}` : `${to.domain}`;
+        const convName = Util.prepJID(to);
         const isMucType = stanza.getChildByAttr("xmlns", "http://jabber.org/protocol/muc");
         log.info(`Handling ${stanza.name} from=${stanza.attrs.from} to=${stanza.attrs.to} for ${gatewayAlias}`);
         if ((delta.changed.includes("online") || delta.changed.includes("newdevice")) && isMucType) {
@@ -68,7 +69,7 @@ export class XmppJsGateway implements IGateway {
             // Gateways are special.
             // We also want to drop the resource from the sender.
             const from = jid(stanza.attrs.from);
-            const sender = (from.local !== "") ? `${from.local}@${from.domain}` : `${from.domain}`;
+            const sender = Util.prepJID(from);
             this.xmpp.emit("gateway-joinroom", {
                 join_id: stanza.attrs.id,
                 roomAlias: gatewayAlias,
@@ -245,7 +246,7 @@ export class XmppJsGateway implements IGateway {
 
     public reflectPM(stanza: Element) {
         const to = jid(stanza.attrs.to);
-        const convName = (to.local !== "") ? `${to.local}@${to.domain}` : `${to.domain}`;
+        const convName = Util.prepJID(to);
         // This is quite easy..
         const sender = this.members.getXmppMemberByRealJid(convName, stanza.attrs.from);
         if (!sender) {
@@ -298,7 +299,7 @@ export class XmppJsGateway implements IGateway {
 
     public getMxidForRemote(sender: string) {
         const j = jid(sender);
-        const username = (j.local !== "") ? `${j.local}@${j.domain}` : `${j.domain}`;
+        const username = Util.prepJID(j);
         return XMPP_PROTOCOL.getMxIdForProtocol(username, this.config.domain, this.config.userPrefix).getId();
     }
 
@@ -315,7 +316,7 @@ export class XmppJsGateway implements IGateway {
         }
         const from = jid(stanza.attrs.from);
         const to = jid(stanza.attrs.to);
-        const chatName = `${to.local}@${to.domain}`;
+        const chatName = Util.prepJID(to);
 
         if (err || !room) {
             const presenceStatus = this.presenceCache.getStatus(stanza.attrs.from);
@@ -351,8 +352,8 @@ export class XmppJsGateway implements IGateway {
                 throw Error("Conflicting nickname, not joining");
             }
             const existingXmppMember = existingMember as IGatewayMemberXmpp;
-            const existingUserId = `${existingXmppMember.realJid!.local}@${existingXmppMember.realJid!.domain}`;
-            const currentUserId = `${from.local}@${from.domain}`;
+            const existingUserId = Util.prepJID(existingXmppMember.realJid!);
+            const currentUserId = Util.prepJID(from);
             if (existingXmppMember.devices.has(stanza.attrs.from)) {
                 log.debug("Existing device has requested a join");
                 // An existing device has reconnected, so fall through here.
@@ -452,7 +453,7 @@ export class XmppJsGateway implements IGateway {
 
 
         this.members.addXmppMember(
-            `${to.local}@${to.domain}`,
+            Util.prepJID(to),
             from,
             to,
             ownMxid,
@@ -521,7 +522,7 @@ export class XmppJsGateway implements IGateway {
 
     private upsertXMPPUser(realJid: JID, mxId: string) {
         const rooms = this.members.getAnonJidsForXmppJid(realJid);
-        const realJidStripped = `${realJid.local}@${realJid.domain}`;
+        const realJidStripped = Util.prepJID(realJid);
 
         this.xmpp.emit("store-remote-user", {
             mxId,
@@ -598,7 +599,7 @@ export class XmppJsGateway implements IGateway {
     public maskPMSenderRecipient(senderMxid: string, recipientJid: string)
         : {recipient: string, sender: string}|undefined {
         const j = jid(recipientJid);
-        const convName = (j.local !== "") ? `${j.local}@${j.domain}` : `${j.domain}`;
+        const convName = Util.prepJID(j);
         log.info("Looking up possible gateway:", senderMxid, recipientJid, convName);
         const recipient = this.members.getMemberByAnonJid<IGatewayMemberXmpp>(convName, recipientJid);
         if (!recipient) {
@@ -647,7 +648,7 @@ export class XmppJsGateway implements IGateway {
     private remoteLeft(stanza: Element) {
         log.info(`${stanza.attrs.from} left ${stanza.attrs.to}`);
         const to = jid(stanza.attrs.to);
-        const chatName = `${to.local}@${to.domain}`;
+        const chatName = Util.prepJID(to);
         const user = this.members.getXmppMemberByRealJid(chatName, stanza.attrs.from);
         if (!user) {
             log.error(`User tried to leave room, but they aren't in the member list`);

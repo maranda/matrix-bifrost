@@ -1,4 +1,5 @@
 import { JID, jid } from "@xmpp/jid";
+import { Util } from "../Util";
 
 interface IGatewayMember {
     type: "xmpp"|"matrix";
@@ -97,7 +98,7 @@ export class GatewayMUCMembership {
     public getXmppMemberByRealJid(chatName: string, realJid: string|JID): IGatewayMemberXmpp|undefined {
         // Strip the resource.
         const j = typeof(realJid) === "string" ? jid(realJid) : realJid;
-        const strippedJid = `${j.local}@${j.domain}`;
+        const strippedJid = Util.prepJID(j);
         const member = this.getXmppMembers(chatName).find((user) => user.realJid.toString() === strippedJid);
         return member;
     }
@@ -163,7 +164,7 @@ export class GatewayMUCMembership {
      * @returns True if this is the first device for a user, false otherwise.
      */
     public addXmppMember(chatName: string, realJid: JID, anonymousJid: JID, matrixId: string): boolean {
-        const strippedDevice = jid(`${realJid.local}@${realJid.domain}`);
+        const strippedDevice = jid(Util.prepJID(realJid));
         const member = this.getXmppMemberByRealJid(chatName, strippedDevice.toString());
         if (member) {
             member.devices.add(realJid.toString());

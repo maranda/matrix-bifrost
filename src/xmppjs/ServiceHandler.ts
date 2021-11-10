@@ -9,6 +9,7 @@ import { StzaIqDiscoInfo, StzaIqPing, StzaIqDiscoItems, StzaIqSearchFields, Szta
 import { IPublicRoomsResponse } from "../MatrixTypes";
 import { IConfigBridge } from "../Config";
 import { XMPPFeatures } from "./XMPPConstants";
+import { Util } from "../Util";
 
 const log = Logging.get("ServiceHandler");
 
@@ -415,7 +416,7 @@ export class ServiceHandler {
                 // No gateways configured, not pinging.
                 return;
             }
-            const chatName = `${toJid.local}@${toJid.domain}`;
+            const chatName = Util.prepJID(toJid);
             const result = !!this.xmpp.gateway.isJIDInMuc(chatName, fromJid);
             if (result) {
                 await this.xmpp.xmppSend(new StzaIqPing(to, from, id, "result"));
