@@ -54,7 +54,9 @@ class XmppProtocol extends BifrostProtocol {
            We also show the resource first if given, because it's usually the nick
            of a user which is more important than the localpart. */
         const resource = j.resource ? j.resource + "/" : "";
-        return new MatrixUser(`@${prefix}${resource}${j.local}@${j.domain}:${domain}`);
+        return new MatrixUser(
+            (j.local !== "") ? `@${prefix}${resource}${j.local}@${j.domain}:${domain}` : `@${prefix}${resource}${j.domain}:${domain}`
+        );
     }
 }
 
