@@ -638,7 +638,7 @@ export class XmppJsGateway implements IGateway {
             return this.hashesCache.get(chatName);
         }
         try {
-            const alias = this.xmpp.serviceHandler.parseAliasFromJID(chatName);
+            const alias = this.xmpp.serviceHandler.parseAliasFromJID(jid(chatName));
             const room = this.xmpp.serviceHandler.queryRoom(alias) as any;
             if (room.roomAvatar !== "") {
                 const hash = await ProtoHacks.getAvatarHash(room.roomId, room.roomAvatar, this.bridge.getIntent());
