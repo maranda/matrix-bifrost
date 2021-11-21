@@ -261,8 +261,8 @@ export class GatewayHandler {
         log.info(`Trying to discover ${ev.roomAlias}`);
         try {
             const res = await this.bridge.getIntent().getClient().resolveRoomAlias(ev.roomAlias);
-            let roomAvatar: string;
-            let roomDesc: string;
+            let roomAvatar: any;
+            let roomDesc: any;
             let roomOccupants: number;
             try {
                 const state = await this.bridge.getIntent().roomState(res.room_id) as WeakEvent[];
