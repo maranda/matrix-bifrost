@@ -339,7 +339,7 @@ export class ServiceHandler {
         let mxId: string;
         let profile: { displayname?: string, avatar_url?: string };
         // check if we're querying an account or a gateway room
-        if (to.match(/^#/)) { // it's a gateway
+        if (to.match(/^#/) && !toJid.resource) { // it's a gateway
             try {
                 const alias = this.parseAliasFromJID(toJid);
                 if (!alias) {
