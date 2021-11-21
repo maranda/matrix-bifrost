@@ -26,6 +26,8 @@ import { GatewayStateResolve } from "./GatewayStateResolve";
 import { MatrixMembershipEvent } from "../MatrixTypes";
 import { IHistoryLimits, HistoryManager, MemoryStorage } from "./HistoryManager";
 import { Util } from "../Util";
+import { ProtoHacks } from "../ProtoHacks";
+import { ServiceHandler } from "./ServiceHandler";
 
 const log = Logging.get("XmppJsGateway");
 
@@ -42,6 +44,8 @@ export interface RemoteGhostExtraData {
 export class XmppJsGateway implements IGateway {
     // For storing room history
     private roomHistory: HistoryManager;
+    // For storing room vcard hashes
+    private hashesCache: Map<string, string>; // chatName -> hash
     // For storing requests to be responded to, like joins
     private stanzaCache: Map<string, Element>; // id -> stanza
     private presenceCache: PresenceCache;
@@ -49,6 +53,7 @@ export class XmppJsGateway implements IGateway {
     private members: GatewayMUCMembership;
     constructor(private xmpp: XmppJsInstance, private registration: AutoRegistration, private config: IConfigBridge, private bridge: Bridge) {
         this.roomHistory = new HistoryManager(new MemoryStorage(50));
+        this.hashesCache = new Map();
         this.stanzaCache = new Map();
         this.members = new GatewayMUCMembership();
         this.presenceCache = new PresenceCache(true);
@@ -289,6 +294,7 @@ export class XmppJsGateway implements IGateway {
             log.warn("No users found for gateway room!");
         }
         if (type !== "topic" && type !== "name") {
+            this.hashesCache.set(chatName, room.avatar);
             this.reflectXMPPStanza(chatName,
                 new StzaPresence(chatName, "", "room-avatar", null, room.avatar)
             );
@@ -419,6 +425,14 @@ export class XmppJsGateway implements IGateway {
 
         // get vcard hash
         const selfHash = stanza.getChild("x", "vcard-temp:x:update")?.getChildText("photo");
+
+        // send room vcard hash
+        const roomHash = await this.getRoomAvatarHash(chatName);
+        if (roomHash) {
+            await this.reflectXMPPStanza(chatName,
+                new StzaPresence(chatName, "", "room-avatar", null, roomHash)
+            );
+        }
 
         log.debug("Emitting membership of self");
         // 2. Send everyone else the users new presence.
@@ -617,6 +631,24 @@ export class XmppJsGateway implements IGateway {
             recipient: recipient.devices[recipient.devices.size - 1].toString(),
             sender: sender.anonymousJid.toString(),
         };
+    }
+
+    private async getRoomAvatarHash(chatName: string) {
+        if (this.hashesCache.has(chatName)) {
+            return this.hashesCache.get(chatName);
+        }
+        try {
+            const alias = this.xmpp.serviceHandler.parseAliasFromJID(chatName);
+            const room = this.xmpp.serviceHandler.queryRoom(alias) as any;
+            if (room.roomAvatar !== "") {
+                const hash = await ProtoHacks.getAvatarHash(room.roomId, room.roomAvatar, this.bridge.getIntent());
+                this.hashesCache.set(chatName, hash);
+                return hash;
+            }
+            return null;
+        } catch (ex) {
+            return null;
+        }
     }
 
     private updateMatrixMemberListForRoom(chatName: string, room: IGatewayRoom, allowForJoin = false) {

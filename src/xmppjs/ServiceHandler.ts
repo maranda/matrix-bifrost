@@ -249,7 +249,7 @@ export class ServiceHandler {
         await this.xmpp.xmppSend(response);
     }
 
-    private queryRoom(roomAlias: string): Promise<any|IGatewayRoom> {
+    public queryRoom(roomAlias: string): Promise<any|IGatewayRoom> {
         return new Promise((resolve, reject) => {
             this.xmpp.emit("gateway-queryroom", {
                 roomAlias,
@@ -347,7 +347,7 @@ export class ServiceHandler {
                     this.notFound(from, to, id, "vCard", "vcard-temp");
                 }
                 const query = await this.queryRoom(alias) as any;
-                mxId = query.roomID;
+                mxId = query.roomId;
                 profile = { avatar_url: query.roomAvatar };
             } catch (ex) {
                 log.warn(`Failed to query room vCard: ${ex}`);

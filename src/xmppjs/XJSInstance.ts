@@ -65,7 +65,7 @@ const SEEN_MESSAGES_SIZE = 16384;
 
 export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     public readonly presenceCache: PresenceCache;
-    private serviceHandler: ServiceHandler;
+    public serviceHandler: ServiceHandler;
     private xmpp?: any;
     private myAddress!: JID;
     private accounts: Map<string, XmppJsAccount>;
