@@ -135,8 +135,8 @@ export class GatewayHandler {
             this.purple.gateway.sendStateChange(chatName, sender, "topic", room);
         } else if (ev.type === "m.room.avatar") {
             log.info("Handing room avatar change for gateway");
-            log.debug("Room avatar changes aren't supported yet.");
-        //    this.purple.gateway.sendStateChange(chatName, sender, "topic", ev.content.topic);
+            room.avatar = await ProtoHacks.getAvatarHash(context.matrix.getId(), ev.content.url, this.bridge.getIntent());
+            this.purple.gateway.sendStateChange(chatName, sender, "avatar", room);
         }
     }
 
@@ -261,12 +261,15 @@ export class GatewayHandler {
         log.info(`Trying to discover ${ev.roomAlias}`);
         try {
             const res = await this.bridge.getIntent().getClient().resolveRoomAlias(ev.roomAlias);
-            let roomDesc: any;
+            let roomAvatar: string;
+            let roomDesc: string;
             let roomOccupants: number;
             try {
                 const state = await this.bridge.getIntent().roomState(res.room_id) as WeakEvent[];
                 const roomEv = state.find((ev) => ev.type === "m.room.name");
+                const avatarEv = state.find((ev) => ev.type === "m.room.avatar");
                 roomOccupants = state.filter((ev) => (ev.type === "m.room.member" && ev.content.membership === "join")).length;
+                roomAvatar = avatarEv ? avatarEv.content.url : "";
                 roomDesc = roomEv ? roomEv.content.name : "";
             } catch (ex) {
                 log.warn("Can't get occupants number:", ex);
@@ -274,6 +277,7 @@ export class GatewayHandler {
             log.info(`Found ${res.room_id}`);
             ev.result(null, {
                 roomId: res.room_id,
+                roomAvatar: roomAvatar,
                 roomDesc: roomDesc,
                 roomOccupants: roomOccupants ? roomOccupants : 0,
             });

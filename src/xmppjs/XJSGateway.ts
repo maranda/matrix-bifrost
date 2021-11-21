@@ -16,7 +16,7 @@ import { IGatewayRoom } from "../bifrost/Gateway";
 import { PresenceCache } from "./PresenceCache";
 import { XHTMLIM } from "./XHTMLIM";
 import { BifrostRemoteUser } from "../store/BifrostRemoteUser";
-import { StzaPresenceItem, StzaMessage, StzaMessageSubject,
+import { StzaPresence, StzaPresenceItem, StzaMessage, StzaMessageSubject,
     StzaPresenceError, StzaBase, StzaPresenceKick, PresenceAffiliation, PresenceRole } from "./Stanzas";
 import { IGateway } from "../bifrost/Gateway";
 import { GatewayMUCMembership, IGatewayMemberXmpp, IGatewayMemberMatrix } from "./GatewayMUCMembership";
@@ -289,6 +289,9 @@ export class XmppJsGateway implements IGateway {
             log.warn("No users found for gateway room!");
         }
         if (type !== "topic" && type !== "name") {
+            this.reflectXMPPStanza(chatName,
+                new StzaPresence(chatName, "", "room-avatar", null, room.avatar)
+            );
             return;
         }
         this.reflectXMPPStanza(chatName,

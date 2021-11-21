@@ -278,6 +278,7 @@ export class ServiceHandler {
             discoInfo.feature.add(XMPPFeatures.Muc);
             discoInfo.feature.add(XMPPFeatures.MessageCorrection);
             discoInfo.feature.add(XMPPFeatures.XHTMLIM);
+            discoInfo.feature.add(XMPPFeatures.vCard);
             discoInfo.identity.add({
                 category: "conference",
                 name: alias,
@@ -334,28 +335,48 @@ export class ServiceHandler {
 
     private async handleVcard(from: string, to: string, id: string, intent: any) {
         // Fetch mxid.
-        const account = this.xmpp.getAccountForJid(jid(to));
-        if (!account) {
-            log.warn("Account fetch failed for", to);
-            this.notFound(from, to, id, "vCard", "vcard-temp");
-            return;
-        }
-        let profile: {displayname?: string, avatar_url?: string};
-        try {
-            // TODO: Move this to a gateway-profilelookup or something.
-            if (account.mxId.match(/^@/)) {
-                profile = await intent.getProfileInfo(account.mxId, null);
-            } else {
-                throw Error(`Account ${account.mxId} is still in an undefined state`);
+        const toJid = jid(to);
+        let mxId: string;
+        let profile: { displayname?: string, avatar_url?: string };
+        // check if we're querying an account or a gateway room
+        if (to.match(/^#/)) { // it's a gateway
+            try {
+                const alias = this.parseAliasFromJID(toJid);
+                if (!alias) {
+                    log.warn(`${Util.prepJID(toJid)} tried to query an invalid alias`);
+                    this.notFound(from, to, id, "vCard", "vcard-temp");
+                }
+                const query = await this.queryRoom(alias) as any;
+                mxId = query.roomID;
+                profile = { avatar_url: query.roomAvatar };
+            } catch (ex) {
+                log.warn(`Failed to query room vCard: ${ex}`);
+                this.notFound(from, to, id, "vCard", "vcard-temp");
             }
-        } catch (ex) {
-            log.warn("Profile fetch failed for ", account.mxId, ex);
-            this.notFound(from, to, id, "vCard", "vcard-temp");
-            return;
+        } else {
+            const account = this.xmpp.getAccountForJid(toJid);
+            if (!account) {
+                log.warn("Account fetch failed for", to);
+                this.notFound(from, to, id, "vCard", "vcard-temp");
+                return;
+            }
+            mxId = account.mxId;
+            try {
+                // TODO: Move this to a gateway-profilelookup or something.
+                if (mxId.match(/^@/)) {
+                    profile = await intent.getProfileInfo(mxId, null);
+                } else {
+                    throw Error(`Account ${mxId} is still in an undefined state`);
+                }
+            } catch (ex) {
+                log.warn("Profile fetch failed for ", mxId, ex);
+                this.notFound(from, to, id, "vCard", "vcard-temp");
+                return;
+            }
         }
 
         const vCard: Element[] = [
-            x("URL", undefined, `https://matrix.to/#/${account.mxId}`),
+            x("URL", undefined, `https://matrix.to/#/${mxId}`),
         ];
 
         if (profile.displayname) {
@@ -376,7 +397,7 @@ export class ServiceHandler {
                     );
                 }
             } catch (ex) {
-                log.warn("Could not fetch avatar for ", account.mxId, ex);
+                log.warn("Could not fetch avatar for ", mxId, ex);
             }
         }
 
