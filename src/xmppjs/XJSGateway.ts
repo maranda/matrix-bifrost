@@ -429,9 +429,7 @@ export class XmppJsGateway implements IGateway {
         // send room vcard hash
         const roomHash = await this.getRoomAvatarHash(chatName);
         if (roomHash) {
-            await this.reflectXMPPStanza(chatName,
-                new StzaPresencePhoto(chatName, "", "room-avatar", null, roomHash)
-            );
+            await this.xmpp.xmppSend(new StzaPresencePhoto(chatName, stanza.attrs.from, "room-avatar", null, roomHash));
         }
 
         log.debug("Emitting membership of self");
