@@ -16,7 +16,7 @@ import { IGatewayRoom } from "../bifrost/Gateway";
 import { PresenceCache } from "./PresenceCache";
 import { XHTMLIM } from "./XHTMLIM";
 import { BifrostRemoteUser } from "../store/BifrostRemoteUser";
-import { StzaPresence, StzaPresenceItem, StzaMessage, StzaMessageSubject,
+import { StzaPresencePhoto, StzaPresenceItem, StzaMessage, StzaMessageSubject,
     StzaPresenceError, StzaBase, StzaPresenceKick, PresenceAffiliation, PresenceRole } from "./Stanzas";
 import { IGateway } from "../bifrost/Gateway";
 import { GatewayMUCMembership, IGatewayMemberXmpp, IGatewayMemberMatrix } from "./GatewayMUCMembership";
@@ -296,7 +296,7 @@ export class XmppJsGateway implements IGateway {
         if (type !== "topic" && type !== "name") {
             this.hashesCache.set(chatName, room.avatar);
             this.reflectXMPPStanza(chatName,
-                new StzaPresence(chatName, "", "room-avatar", null, room.avatar)
+                new StzaPresencePhoto(chatName, "", "room-avatar", null, room.avatar)
             );
             return;
         }
@@ -430,7 +430,7 @@ export class XmppJsGateway implements IGateway {
         const roomHash = await this.getRoomAvatarHash(chatName);
         if (roomHash) {
             await this.reflectXMPPStanza(chatName,
-                new StzaPresence(chatName, "", "room-avatar", null, roomHash)
+                new StzaPresencePhoto(chatName, "", "room-avatar", null, roomHash)
             );
         }
 

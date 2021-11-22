@@ -207,6 +207,25 @@ export class StzaPresencePart extends StzaPresence {
     }
 }
 
+export class StzaPresencePhoto extends StzaPresence {
+    constructor(
+        from: string,
+        to: string,
+        id?: string,
+        public presenceType?: string,
+        public avatarHash?: string,
+    ) {
+        super(from, to, id);
+    }
+
+    public get presenceContent() {
+        if (this.avatarHash) {
+            return `<x xmlns='vcard-temp:x:update'><photo>${this.avatarHash}</photo></x>`;
+        }
+        return `<x xmlns='vcard-temp:x:update'><photo/></x>`;
+    }
+}
+
 export class StzaPresenceKick extends StzaPresenceItem {
     constructor(
         from: string,
