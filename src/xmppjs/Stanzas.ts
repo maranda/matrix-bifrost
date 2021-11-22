@@ -216,6 +216,7 @@ export class StzaPresencePhoto extends StzaPresence {
         public avatarHash?: string,
     ) {
         super(from, to, id);
+        this.includeXContent = false;
     }
 
     public get presenceContent() {
