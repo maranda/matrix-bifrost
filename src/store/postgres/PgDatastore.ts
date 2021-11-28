@@ -125,8 +125,8 @@ export class PgDataStore implements IStore {
             Util.createRemoteId(protocol.id, sender),
             sender,
             protocol.id,
-            row.is_ghost,
-            row.displayname,
+            true,
+            null,
             row.extra_data,
         );
     }
@@ -141,7 +141,7 @@ export class PgDataStore implements IStore {
             row.sender_name,
             row.protocol_id,
             true,
-            row.displayname,
+            null,
             row.extra_data,
         ));
     }

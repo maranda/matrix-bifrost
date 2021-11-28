@@ -512,8 +512,10 @@ export class MatrixRoomHandler {
                 if (profileNeeded) {
                     await intent.join(roomId);
                 }
-            } else {
+            } else if (data.kicker) {
                 await intent.kick(roomId, senderMatrixUser.getId(), data.reason || undefined);
+            } else {
+                await intent.leave(roomId, data.reason || undefined);
             }
         } catch (ex) {
             log.warn("Failed to apply state change:", ex);
