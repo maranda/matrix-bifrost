@@ -512,10 +512,11 @@ export class MatrixRoomHandler {
                 if (profileNeeded) {
                     await intent.join(roomId);
                 }
-            } else if (data.kicker) {
+            } else if (data.state === "kick") {
                 await intent.kick(roomId, senderMatrixUser.getId(), data.reason || undefined);
-            } else {
+            } else if (data.state === "left") {
                 if (this.config.tuning.limitStateChanges && (!data.gatewayAlias && !data.banner && !data.kicker && !data.technical)) {
+                    log.info(`No-Oping leave for ${data.sender} as state changes are limited`);
                     return;
                 }
                 await intent.leave(roomId, data.reason || undefined);
