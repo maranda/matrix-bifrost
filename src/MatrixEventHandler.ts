@@ -698,7 +698,7 @@ Say \`help\` for more commands.
         if (!event.state_key || !membership) {
             return;
         }
-        log.info(`Handling group ${event.sender} ${membership}`);
+        log.info(`Handling group ${event.state_key} ${membership}`);
         let acct: IBifrostAccount;
         const isGateway: boolean = context.remote.get("gateway");
         const name: string = context.remote.get("room_name");
@@ -711,13 +711,13 @@ Say \`help\` for more commands.
         }
 
         try {
-            acct = (await this.getAccountForMxid(event.sender, roomProtocol)).acct;
+            acct = (await this.getAccountForMxid(event.state_key, roomProtocol)).acct;
         } catch (ex) {
             log.error("Failed to handle join/leave:", ex);
             // Kick em if we cannot join em.
             if (membership === "join") {
                 await this.bridge.getIntent().kick(
-                    event.room_id, event.sender, "Could not find a compatible purple account.",
+                    event.room_id, event.state_key, "Could not find a compatible purple account.",
                 );
             }
             return;
@@ -725,7 +725,7 @@ Say \`help\` for more commands.
         const props = Util.desanitizeProperties(Object.assign({}, context.remote.get("properties")));
         log.info(`Sending ${membership} to`, props);
         if (membership === "join") {
-            await ProtoHacks.addJoinProps(acct.protocol.id, props, event.sender, this.bridge.getIntent());
+            await ProtoHacks.addJoinProps(acct.protocol.id, props, event.state_key, this.bridge.getIntent());
             this.joinOrDefer(acct, name, props);
         } else if (membership === "leave") {
             await acct.rejectChat(props);
