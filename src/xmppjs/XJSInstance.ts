@@ -956,10 +956,23 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 // XXX: Should we attempt to reconnect/kick the user?
                 return;
             }
+            const wasBanned = delta.status!.ban;
+            let banner: string|undefined;
+            if (wasBanned && wasBanned.banner) {
+                banner = `${convName}/${wasBanned.banner}`;
+            }
             const wasKicked = delta.status!.kick;
-            let kicker;
+            let kicker: string|undefined;
+            let technical: boolean|undefined;
             if (wasKicked && wasKicked.kicker) {
                 kicker = `${convName}/${wasKicked.kicker}`;
+            }
+            let reason: string|undefined;
+            if (wasBanned) {
+                reason = wasBanned.reason;
+            } else if (wasKicked) {
+                reason = wasKicked.reason;
+                technical = wasKicked.technical;
             }
 
             this.emit("chat-user-left", {
@@ -972,8 +985,10 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 },
                 sender: stanza.attrs.from,
                 state: "left",
+                banner,
                 kicker,
-                reason: wasKicked ? wasKicked.reason : delta.status!.status,
+                technical,
+                reason: reason || delta.status!.status,
                 gatewayAlias,
             } as IUserStateChanged);
             return;

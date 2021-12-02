@@ -52,7 +52,9 @@ export interface IChatJoined extends IConversationEvent {
 export interface IUserStateChanged extends IConversationEvent {
     sender: string;
     state: "joined"|"left"|"kick";
+    banner: string|undefined;
     kicker: string|undefined;
+    technical: boolean|undefined;
     reason?: string;
     gatewayAlias: string|null;
     id: string;

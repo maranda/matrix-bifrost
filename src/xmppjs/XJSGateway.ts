@@ -84,11 +84,23 @@ export class XmppJsGateway implements IGateway {
                 room_name: convName,
             } as IGatewayJoin);
         } else if (delta.changed.includes("offline")) {
+            const wasBanned = delta.status!.ban;
+            let banner: string|undefined;
+            if (wasBanned && wasBanned.banner) {
+                banner = `${convName}/${wasBanned.banner}`;
+            }
             const wasKicked = delta.status!.kick;
             let kicker: string|undefined;
-
+            let technical: boolean|undefined;
             if (wasKicked && wasKicked.kicker) {
                 kicker = `${convName}/${wasKicked.kicker}`;
+            }
+            let reason: string|undefined;
+            if (wasBanned) {
+                reason = wasBanned.reason;
+            } else if (wasKicked) {
+                reason = wasKicked.reason;
+                technical = wasKicked.technical;
             }
             const member = this.members.getXmppMemberByDevice(convName, stanza.attrs.from);
             const lastDevice = this.remoteLeft(stanza);
@@ -111,8 +123,10 @@ export class XmppJsGateway implements IGateway {
                 },
                 sender: member.realJid.toString(),
                 state: "left",
+                banner,
                 kicker,
-                reason: wasKicked ? wasKicked.reason : delta.status!.status,
+                technical,
+                reason: reason || delta.status!.status,
                 gatewayAlias,
             } as IUserStateChanged);
         } else {

@@ -13,9 +13,14 @@ export interface IPresenceDelta {
 export interface IPresenceStatus {
     resource: string;
     online: boolean;
+    ban: {
+        reason: string | null;
+        banner: string | null;
+    } | undefined;
     kick: {
         reason: string | null;
         kicker: string | null;
+        technical: boolean;
     } | undefined;
     status: string;
     affiliation: string;
@@ -90,6 +95,7 @@ export class PresenceCache {
         }
         const mucUser = stanza.getChild("x", "http://jabber.org/protocol/muc#user");
         const isSelf = !!(mucUser && mucUser.getChildByAttr("code", XMPPStatusCode.SelfPresence));
+        const isBan = !!(mucUser && mucUser.getChildByAttr("code", XMPPStatusCode.SelfBanned));
         const isKick = !!(mucUser && mucUser.getChildByAttr("code", XMPPStatusCode.SelfKicked));
         const isTechnicalRemoval = !!(mucUser && mucUser.getChildByAttr("code", XMPPStatusCode.SelfKickedTechnical));
         const newUser = !this.presence.get(from.toString());
@@ -146,6 +152,18 @@ export class PresenceCache {
             delta.status = currentPresence;
         }
 
+        if (isBan) {
+            delta.changed.push("ban");
+            const item = mucUser!.getChild("item");
+            if (item) {
+                const actor = item.getChild("actor");
+                currentPresence.ban = {
+                    banner: actor ? actor.getAttr("nick") : null,
+                    reason: item.getChildText("reason"),
+                };
+            }
+        }
+
         if (isKick) {
             delta.changed.push("kick");
             const item = mucUser!.getChild("item");
@@ -154,6 +172,7 @@ export class PresenceCache {
                 currentPresence.kick = {
                     kicker: actor ? actor.getAttr("nick") : null,
                     reason: item.getChildText("reason"),
+                    technical: isTechnicalRemoval ? true : false,
                 };
             }
         }

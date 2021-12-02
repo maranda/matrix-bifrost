@@ -67,6 +67,7 @@ export class Config {
     };
 
     public readonly tuning: IConfigTuning = {
+        limitStateChanges: true,
         waitOnProfileBeforeSend: true,
         conferencePMFallbackCheck: false,
         waitOnJoinBeforePM: [],
@@ -160,6 +161,8 @@ interface IConfigLogging {
 }
 
 interface IConfigTuning {
+    // Limit state changes Matrix side only for plumbed/portal rooms to joins, kicks and bans
+    limitStateChanges: boolean;
     // Don't send a message or join a room before setting a profile picture
     waitOnProfileBeforeSend: boolean;
     // A nasty hack to check the domain for conf* to see if the PM is coming from a MUC.

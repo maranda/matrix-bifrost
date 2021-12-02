@@ -515,6 +515,9 @@ export class MatrixRoomHandler {
             } else if (data.kicker) {
                 await intent.kick(roomId, senderMatrixUser.getId(), data.reason || undefined);
             } else {
+                if (this.config.tuning.limitStateChanges && (!data.gatewayAlias && !data.banner && !data.kicker && data.technical)) {
+                    return;
+                }
                 await intent.leave(roomId, data.reason || undefined);
             }
         } catch (ex) {
