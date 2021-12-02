@@ -486,7 +486,7 @@ export class MatrixRoomHandler {
             this.config.bridge.domain,
             this.config.bridge.userPrefix,
         );
-        const intentUser = data.kicker ? protocol.getMxIdForProtocol(
+        const intentUser = (typeof(data.kicker) === "string") ? protocol.getMxIdForProtocol(
             data.kicker,
             this.config.bridge.domain,
             this.config.bridge.userPrefix,

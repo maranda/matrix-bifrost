@@ -960,15 +960,19 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 return;
             }
             const wasBanned = delta.status!.ban;
-            let banner: string|undefined;
+            let banner: string|boolean|undefined;
             if (wasBanned && wasBanned.banner) {
                 banner = `${convName}/${wasBanned.banner}`;
+            } else if (wasBanned) {
+                banner = true;
             }
             const wasKicked = delta.status!.kick;
-            let kicker: string|undefined;
+            let kicker: string|boolean|undefined;
             let technical: boolean|undefined;
             if (wasKicked && wasKicked.kicker) {
                 kicker = `${convName}/${wasKicked.kicker}`;
+            } else if (wasKicked) {
+                kicker = true;
             }
             let reason: string|undefined;
             if (wasBanned) {
