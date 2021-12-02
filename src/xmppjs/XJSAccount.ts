@@ -291,6 +291,7 @@ export class XmppJsAccount implements IBifrostAccount {
             protocol_id: XMPP_PROTOCOL.id,
         } as IStoreRemoteUser);
         await this.xmpp.xmppSend(message);
+        this.xmpp.ourMatrixUsers.add(`${roomName}/${components.handle}`);
         Metrics.remoteCall("xmpp.presence.join");
         return p;
     }
@@ -320,6 +321,7 @@ export class XmppJsAccount implements IBifrostAccount {
             `${components.room}@${components.server}/${components.handle}`,
         ));
         this.roomHandles.delete(room);
+        this.xmpp.ourMatrixUsers.delete(`${components.room}@${components.server}/${components.handle}`);
         Metrics.remoteCall("xmpp.presence.left");
     }
 

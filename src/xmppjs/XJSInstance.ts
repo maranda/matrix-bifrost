@@ -66,6 +66,7 @@ const SEEN_MESSAGES_SIZE = 16384;
 export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     public readonly presenceCache: PresenceCache;
     public serviceHandler: ServiceHandler;
+    public ourMatrixUsers: Set<string>;
     private xmpp?: any;
     private myAddress!: JID;
     private accounts: Map<string, XmppJsAccount>;
@@ -88,6 +89,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         this.serviceHandler = new ServiceHandler(this, config.bridge);
         this.connectionWasDropped = false;
         this.activeMUCUsers = new Set();
+        this.ourMatrixUsers = new Set();
         this.lastMessageInMUC = new Map();
         this.checkMUCCache = new Map();
         this.xmppGateway = null;
@@ -1027,8 +1029,9 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 return;
             }
             if (delta.status && !delta.status.ours) {
-                if (this.isWaitingToJoin(to) === from.toString()) {
-                    // An account is waiting to join this room, so hold off on the
+                if (this.isWaitingToJoin(to) === from.toString() || this.ourMatrixUsers.has(stanza.attrs.to)) {
+                    // An account is waiting to join this room, so hold off on the join
+                    // Or it's one of our Matrix users from a plumb
                     return;
                 }
                 this.emit("chat-user-joined", {
