@@ -882,9 +882,13 @@ E.g. \`${command} ${acct.protocol.id}\` ${required.join(" ")} ${optional.join(" 
 
     private async getAccountForMxid(sender: string, protocol: string,
     ): Promise<{acct: IBifrostAccount, newAcct: boolean}> {
-        const remoteUser = (await this.store.getAccountsForMatrixUser(sender, protocol))[0];
+        const remoteUser = (await this.store.getAccountsForMatrixUser(sender, protocol))[0];    
         if (!remoteUser) {
             log.info(`Account not found for ${sender}`);
+            const prefixAndDomain = new RegExp(`^@.*${this.config.bridge.userPrefix}.*${this.config.bridge.domain}$`);
+            if (sender.match(prefixAndDomain)) {
+                throw Error("Not handling our own puppets");
+            }
             if (!this.autoReg) {
                 throw Error("Autoregistration of accounts not supported");
             }
