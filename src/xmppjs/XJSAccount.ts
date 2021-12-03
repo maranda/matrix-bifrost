@@ -232,6 +232,11 @@ export class XmppJsAccount implements IBifrostAccount {
         log.debug(`joinChat:`, this.remoteId, components);
         if (this.isInRoom(roomName)) {
             log.info(`Didn't join ${to} from ${from} already joined`);
+            this.xmpp.emit("clean-remote-doppleganger", {
+                sender: to,
+                protocol: this.xmpp.getProtocol(XMPP_PROTOCOL.id),
+                roomName,
+            } as ICleanDoppleganger);
             return {
                 eventName: "already-joined",
                 account: {
