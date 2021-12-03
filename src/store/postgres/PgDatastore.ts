@@ -314,7 +314,7 @@ export class PgDataStore implements IStore {
         if (extraData) {
             acctProps.extra_data = JSON.stringify(extraData) ;
         }
-        const statement = PgDataStore.BuildUpsertStatement("remote_users", "ON CONSTRAINT cons_uid_sname_unique", Object.keys(acctProps));
+        const statement = PgDataStore.BuildUpsertStatement("remote_users", "(user_id, sender_name)", Object.keys(acctProps));
         await this.pgPool.query(statement, Object.values(acctProps));
         return {
             matrix: new MatrixUser(userId),
