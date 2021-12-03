@@ -472,7 +472,7 @@ export class MatrixRoomHandler {
         const protocol = this.purple.getProtocol(data.account.protocol_id)!;
         const remoteUser = await this.store.getRemoteUserBySender(data.sender, protocol);
         if (remoteUser && !remoteUser.isRemote) {
-            log.debug(`Didn't handle join/leave/kick for ${data.sender}, isn't remote`);
+            log.info(`Didn't handle join/leave/kick for ${data.sender}, isn't remote: ${remoteUser.id} -> ${remoteUser.isRemote}`);
             return; // Do NOT handle state changes from our own users.
         }
         let verb;
