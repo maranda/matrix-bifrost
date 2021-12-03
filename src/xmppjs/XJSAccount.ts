@@ -37,6 +37,7 @@ export class XmppJsAccount implements IBifrostAccount {
     public readonly connected = true;
 
     public readonly roomHandles: Map<string, string>;
+    public readonly roomNicks: Set<string>;
     private readonly pmSessions: Set<string>;
     private avatarHash?: string;
     private lastStanzaTs: Map<string, number>;
@@ -264,6 +265,7 @@ export class XmppJsAccount implements IBifrostAccount {
             components.avatar_hash,
         );
         this.roomHandles.set(roomName, components.handle);
+        this.roomNicks.add(to);
         this.avatarHash = components.avatar_hash;
         if (setWaiting) {
             this.waitingToJoin.add(roomName);
@@ -323,9 +325,10 @@ export class XmppJsAccount implements IBifrostAccount {
 
         await this.xmpp.xmppSend(new StzaPresencePart(
             `${this.remoteId}/${this.resource}`,
-            `${components.room}@${components.server}/${components.handle}`,
+            `${room}/${components.handle}`,
         ));
         this.roomHandles.delete(room);
+        this.roomNicks.delete(`${room}/${components.handle}`);
         Metrics.remoteCall("xmpp.presence.left");
     }
 

@@ -1030,9 +1030,17 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 } as IChatJoined);
                 return;
             }
+            let negate = false;
+            for (const acct of this.accounts.values()) {
+                if (acct.roomNicks.has(to.toString())) {
+                    negate = true;
+                    break;
+                }
+            }
             if (delta.status && !delta.status.ours) {
-                if (this.isWaitingToJoin(to) === from.toString()) {
-                    // An account is waiting to join this room, so hold off on the join
+                if (this.isWaitingToJoin(to) === from.toString() || negate) {
+                    // An account is waiting to join this room, 
+                    // or we're handling a local ghost so hold off on the join
                     return;
                 }
                 this.emit("chat-user-joined", {
