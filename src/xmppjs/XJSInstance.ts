@@ -1032,7 +1032,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             }
             let negate = false;
             for (const acct of this.accounts.values()) {
-                if (acct.roomNicks.has(to.toString())) {
+                if (acct.roomNicks.has(from.toString())) {
                     negate = true;
                     break;
                 }
