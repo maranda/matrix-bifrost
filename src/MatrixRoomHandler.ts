@@ -92,21 +92,7 @@ export class MatrixRoomHandler {
                 storeUser.data,
             );
         });
-        purple.on("clean-remote-doppleganger", (cleanDoppleganger: ICleanDoppleganger) => {
-            const senderMatrixUser = cleanDoppleganger.protocol.getMxIdForProtocol(
-                cleanDoppleganger.sender,
-                this.config.bridge.domain,
-                this.config.bridge.userPrefix,
-            );
-            let remoteData: IRemoteGroupData = {
-                protocol_id: cleanDoppleganger.protocol.id,
-                room_name: cleanDoppleganger.roomName,
-            };
-            const remoteEntry = await this.store.getGroupRoomByRemoteData(remoteData);
-            const intent = this.bridge.getIntent(senderMatrixUser.getId());
-            intent.leave(remoteEntry.matrix?.getId(), "Doppleganger cleaned up");
-            this.store.removeGhost(senderMatrixUser.getId(), cleanDoppleganger.protocol, cleanDoppleganger.sender);
-        });
+        purple.on("clean-remote-doppleganger", this.handleDPCleaning.bind(this));
         this.remoteEventIdMapping = new Map();
         purple.on("read-receipt", this.handleReadReceipt.bind(this));
     }
@@ -670,5 +656,21 @@ export class MatrixRoomHandler {
         }
         await intent.sendReadReceipt(roomId, eventId);
         log.debug(`Updated read reciept for ${userId} in ${roomId}`);
+    }
+
+    private async handleDPCleaning(data: ICleanDoppleganger) {
+        const senderMatrixUser = data.protocol.getMxIdForProtocol(
+            data.sender,
+            this.config.bridge.domain,
+            this.config.bridge.userPrefix,
+        );
+        let remoteData: IRemoteGroupData = {
+            protocol_id: data.protocol.id,
+            room_name: data.roomName,
+        };
+        const remoteEntry = await this.store.getGroupRoomByRemoteData(remoteData);
+        const intent = this.bridge.getIntent(senderMatrixUser.getId());
+        intent.leave(remoteEntry.matrix?.getId(), "Doppleganger cleaned up");
+        this.store.removeGhost(senderMatrixUser.getId(), data.protocol, data.sender);
     }
 }
