@@ -114,26 +114,36 @@ export class PgDataStore implements IStore {
     public async getRemoteUserBySender(sender: string, protocol: BifrostProtocol): Promise<BifrostRemoteUser | null> {
         // Get a user by sender + profile combo.
         const res = await this.pgPool.query(
-            "SELECT * FROM remote_users WHERE protocol_id = $1 AND sender_name = $2 LIMIT 1",
+            "SELECT * FROM remote_users WHERE protocol_id = $1 AND sender_name = $2",
             [ protocol.id, sender ],
         );
+        let row;
+        let isRemote: boolean = true;
+        const remoteId = Util.createRemoteId(protocol.id, sender);
         if (!res.rowCount) {
             return null;
         }
-        const row = res.rows[0];
-        // check if it has a local account
-        const has_account = await this.pgPool.query(
-            "SELECT * FROM accounts WHERE protocol_id = $1 AND user_id = $2 LIMIT 1",
-            [protocol.id, res.rows[0].user_id],
-        );
-        let isRemote: boolean;
-        if (has_account.rowCount && has_account.rows[0].user_id) {
-            isRemote = false;
+        // check if we need to deduplicate the entry for dopplegangers
+        if (res.rows.length > 1) {
+            for (let resRow of res.rows) {
+                const hasAccount = await this.pgPool.query(
+                    "SELECT * FROM accounts WHERE protocol_id = $1 AND user_id = $2 LIMIT 1",
+                    [protocol.id, resRow.user_id],
+                );
+                if (hasAccount.rowCount && hasAccount.rows[0].user_id) {
+                    isRemote = false;
+                    row = resRow;
+                    break;
+                }
+            }
+            if (!isRemote) {
+                this.removeGhost(remoteId, protocol, sender);
+            }
         } else {
-            isRemote = true;
+            row = res.rows[0];
         }
         return new BifrostRemoteUser(
-            Util.createRemoteId(protocol.id, sender),
+            remoteId,
             sender,
             protocol.id,
             isRemote,
