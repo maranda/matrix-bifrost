@@ -217,7 +217,7 @@ export class XmppJsAccount implements IBifrostAccount {
     public async joinChat(
         components: IChatJoinProperties,
         instance?: IBifrostInstance,
-        timeout: number = 30000,
+        timeout: number = 60000,
         setWaiting: boolean = true)
         : Promise<IConversationEvent|void> {
         if (!components.fullRoomName && (!components.room || !components.server)) {
@@ -228,9 +228,10 @@ export class XmppJsAccount implements IBifrostAccount {
         }
         const roomName = components.fullRoomName || `${components.room}@${components.server}`;
         const to = `${roomName}/${components.handle}`;
+        const from = `${this.remoteId}/${this.resource}`;
         log.debug(`joinChat:`, this.remoteId, components);
         if (this.isInRoom(roomName)) {
-            log.debug("Didn't join, already joined");
+            log.info(`Didn't join ${to} from ${from} already joined`);
             return {
                 eventName: "already-joined",
                 account: {
@@ -243,8 +244,14 @@ export class XmppJsAccount implements IBifrostAccount {
             };
         }
         if (await this.selfPing(to)) {
-            log.debug("Didn't join, self ping says we are joined");
+            log.info(`Didn't join ${to} from ${from} self ping says we are joined`);
             this.roomHandles.set(roomName, components.handle);
+            this.roomNicks.add(to);
+            this.xmpp.emit("clean-remote-doppleganger", {
+                sender: to,
+                protocol: this.xmpp.getProtocol(XMPP_PROTOCOL.id),
+                roomName,
+            } as ICleanDoppleganger);
             return {
                 eventName: "already-joined",
                 account: {
@@ -256,7 +263,6 @@ export class XmppJsAccount implements IBifrostAccount {
                 },
             };
         }
-        const from = `${this.remoteId}/${this.resource}`;
         log.info(`Joining to=${to} from=${from}`);
         const message = new StzaPresenceJoin(
             from,
@@ -279,6 +285,11 @@ export class XmppJsAccount implements IBifrostAccount {
                     if (data.conv.name === roomName) {
                         this.waitingToJoin.delete(roomName);
                         log.info(`Got ack for join ${roomName}`);
+                        this.xmpp.emit("clean-remote-doppleganger", {
+                            sender: to,
+                            protocol: this.xmpp.getProtocol(XMPP_PROTOCOL.id),
+                            roomName,
+                        } as ICleanDoppleganger);
                         clearTimeout(timer);
                         this.xmpp.removeListener("chat-joined", cb);
                         resolve(data);
@@ -293,12 +304,6 @@ export class XmppJsAccount implements IBifrostAccount {
             remoteId: to,
             protocol_id: XMPP_PROTOCOL.id,
         } as IStoreRemoteUser);
-        // And we dispose of eventual dopplegangers.
-        this.xmpp.emit("clean-remote-doppleganger", {
-            sender: to,
-            protocol: this.xmpp.getProtocol(XMPP_PROTOCOL.id),
-            roomName,
-        } as ICleanDoppleganger);
         await this.xmpp.xmppSend(message);
         Metrics.remoteCall("xmpp.presence.join");
         return p;
