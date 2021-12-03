@@ -4,8 +4,8 @@
 
 import { IBifrostAccount } from "./Account";
 import { IBasicProtocolMessage } from "../MessageFormatter";
-import { IGatewayRoom } from "./Gateway";
 import { IPublicRoomsResponse } from "../MatrixTypes";
+import { BifrostProtocol } from "./Protocol";
 
 export interface IChatJoinProperties {[key: string]: string; }
 
@@ -116,4 +116,10 @@ export interface IStoreRemoteUser {
     remoteId: string;
     protocol_id: string;
     data?: any;
+}
+
+export interface ICleanDoppleganger {
+    sender: string;
+    protocol: BifrostProtocol;
+    roomName: string;
 }

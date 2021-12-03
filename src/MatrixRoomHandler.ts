@@ -12,6 +12,7 @@ import {
     IChatTyping,
     IStoreRemoteUser,
     IChatReadReceipt,
+    ICleanDoppleganger,
 } from "./bifrost/Events";
 import { ProfileSync } from "./ProfileSync";
 import { Util } from "./Util";
@@ -22,6 +23,7 @@ import { Config } from "./Config";
 import { decode as entityDecode } from "html-entities";
 import { MessageFormatter } from "./MessageFormatter";
 import request from "axios";
+import { BifrostProtocol } from "./bifrost/Protocol";
 const log = Logging.get("MatrixRoomHandler");
 
 const ACCOUNT_LOCK_MS = 1000;
@@ -89,6 +91,21 @@ export class MatrixRoomHandler {
                 storeUser.remoteId,
                 storeUser.data,
             );
+        });
+        purple.on("clean-remote-doppleganger", (cleanDoppleganger: ICleanDoppleganger) => {
+            const senderMatrixUser = cleanDoppleganger.protocol.getMxIdForProtocol(
+                cleanDoppleganger.sender,
+                this.config.bridge.domain,
+                this.config.bridge.userPrefix,
+            );
+            let remoteData: IRemoteGroupData = {
+                protocol_id: cleanDoppleganger.protocol.id,
+                room_name: cleanDoppleganger.roomName,
+            };
+            const remoteEntry = await this.store.getGroupRoomByRemoteData(remoteData);
+            const intent = this.bridge.getIntent(senderMatrixUser.getId());
+            intent.leave(remoteEntry.matrix?.getId(), "Doppleganger cleaned up");
+            this.store.removeGhost(senderMatrixUser.getId(), cleanDoppleganger.protocol, cleanDoppleganger.sender);
         });
         this.remoteEventIdMapping = new Map();
         purple.on("read-receipt", this.handleReadReceipt.bind(this));

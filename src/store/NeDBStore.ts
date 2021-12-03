@@ -172,6 +172,10 @@ export class NeDBStore implements IStore {
         return p;
     }
 
+    public async removeGhost(userId: string, protocol: BifrostProtocol, username: string) {
+        // not implemented
+    }
+
     public async removeRoomByRoomId(matrixId: string) {
         log.info(`Removing room ${matrixId}`);
         (await this.roomStore.getLinkedRemoteRooms(matrixId)).forEach((remote) => {

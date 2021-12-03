@@ -45,6 +45,7 @@ export interface IStore {
     storeGhost(userId: string, protocol: BifrostProtocol, username: string, extraData?: any)
     : Promise<{remote: BifrostRemoteUser, matrix: MatrixUser}>;
     storeAccount(userId: string, protocol: BifrostProtocol, username: string, extraData?: any): Promise<void>;
+    removeGhost(userId: string, protocol: BifrostProtocol, username: string): Promise<void>;
     removeRoomByRoomId(matrixId: string): Promise<void>;
 
     getRoomEntryByMatrixId(roomId: string): Promise<RoomBridgeStoreEntry|null>;

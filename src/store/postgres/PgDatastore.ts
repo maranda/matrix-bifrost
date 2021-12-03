@@ -45,7 +45,7 @@ const TableToRoomType = {
 };
 
 export class PgDataStore implements IStore {
-    public static LATEST_SCHEMA = 2;
+    public static LATEST_SCHEMA = 3;
 
     private static BuildUpsertStatement(table: string, constraint: string, keyNames: string[]): string {
         const keys = keyNames.join(", ");
@@ -121,11 +121,22 @@ export class PgDataStore implements IStore {
             return null;
         }
         const row = res.rows[0];
+        // check if it has a local account
+        const has_account = await this.pgPool.query(
+            "SELECT * FROM accounts WHERE protocol_id = $1 AND user_id = $2 LIMIT 1",
+            [protocol.id, res.rows[0].user_id],
+        );
+        let isRemote: boolean;
+        if (has_account.rowCount && has_account.rows[0].user_id) {
+            isRemote = false;
+        } else {
+            isRemote = true;
+        }
         return new BifrostRemoteUser(
             Util.createRemoteId(protocol.id, sender),
             sender,
             protocol.id,
-            true,
+            isRemote,
             null,
             row.extra_data,
         );
@@ -303,12 +314,19 @@ export class PgDataStore implements IStore {
         if (extraData) {
             acctProps.extra_data = JSON.stringify(extraData) ;
         }
-        const statement = PgDataStore.BuildUpsertStatement("remote_users", "(user_id)", Object.keys(acctProps));
+        const statement = PgDataStore.BuildUpsertStatement("remote_users", "ON CONSTRAINT cons_uid_sname_unique", Object.keys(acctProps));
         await this.pgPool.query(statement, Object.values(acctProps));
         return {
             matrix: new MatrixUser(userId),
             remote: new BifrostRemoteUser(userId, username, protocol.id, true),
         };
+    }
+
+    public async removeGhost(userId: string, protocol: BifrostProtocol, username: string) {
+        await this.pgPool.query(
+            "DELETE FROM remote_users WHERE user_id = $1 AND protocol = $2 AND sender_name = $3",
+            [ userId, protocol, username ],
+        );
     }
 
     public async removeRoomByRoomId(matrixId: string) {

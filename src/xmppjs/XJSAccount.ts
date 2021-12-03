@@ -1,5 +1,5 @@
 import { IChatJoinProperties,
-    IUserInfo, IConversationEvent, IChatJoined, IAccountMinimal, IStoreRemoteUser } from "../bifrost/Events";
+    IUserInfo, IConversationEvent, IChatJoined, IAccountMinimal, IStoreRemoteUser, ICleanDoppleganger } from "../bifrost/Events";
 import { XmppJsInstance, XMPP_PROTOCOL } from "./XJSInstance";
 import { IBifrostAccount, IChatJoinOptions } from "../bifrost/Account";
 import { IBifrostInstance } from "../bifrost/Instance";
@@ -215,7 +215,7 @@ export class XmppJsAccount implements IBifrostAccount {
     public async joinChat(
         components: IChatJoinProperties,
         instance?: IBifrostInstance,
-        timeout: number = 5000,
+        timeout: number = 20000,
         setWaiting: boolean = true)
         : Promise<IConversationEvent|void> {
         if (!components.fullRoomName && (!components.room || !components.server)) {
@@ -290,8 +290,13 @@ export class XmppJsAccount implements IBifrostAccount {
             remoteId: to,
             protocol_id: XMPP_PROTOCOL.id,
         } as IStoreRemoteUser);
+        // And we dispose of eventual dopplegangers.
+        this.xmpp.emit("clean-remote-doppleganger", {
+            sender: to,
+            protocol: this.xmpp.getProtocol(XMPP_PROTOCOL.id),
+            roomName,
+        } as ICleanDoppleganger);
         await this.xmpp.xmppSend(message);
-        this.xmpp.ourMatrixUsers.add(`${roomName}/${components.handle}`);
         Metrics.remoteCall("xmpp.presence.join");
         return p;
     }
@@ -321,7 +326,6 @@ export class XmppJsAccount implements IBifrostAccount {
             `${components.room}@${components.server}/${components.handle}`,
         ));
         this.roomHandles.delete(room);
-        this.xmpp.ourMatrixUsers.delete(`${components.room}@${components.server}/${components.handle}`);
         Metrics.remoteCall("xmpp.presence.left");
     }
 
