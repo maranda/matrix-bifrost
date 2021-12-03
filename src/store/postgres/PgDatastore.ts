@@ -334,8 +334,8 @@ export class PgDataStore implements IStore {
 
     public async removeGhost(userId: string, protocol: BifrostProtocol, username: string) {
         await this.pgPool.query(
-            "DELETE FROM remote_users WHERE user_id = $1 AND protocol = $2 AND sender_name = $3",
-            [ userId, protocol, username ],
+            "DELETE FROM remote_users WHERE user_id = $1 AND protocol_id = $2 AND sender_name = $3",
+            [ userId, protocol.id, username ],
         );
     }
 
