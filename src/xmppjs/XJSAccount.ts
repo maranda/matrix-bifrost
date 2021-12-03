@@ -49,6 +49,7 @@ export class XmppJsAccount implements IBifrostAccount {
         public readonly mxId: string,
     ) {
         this.roomHandles = new Map();
+        this.roomNicks = new Set();
         this.waitingToJoin = new Set();
         this.pmSessions = new Set();
         this.lastStanzaTs = new Map();
