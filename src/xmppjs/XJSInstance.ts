@@ -485,7 +485,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             const timeout = setTimeout(() => reject(Error("Timeout")), 5000);
             if (mucExists) {
                 for (let [username, account] of this.accounts) {
-                    log.info(`Checking if ${username} is in ${who}`);
+                    log.debug(`Checking if ${username} is in ${who}`);
                     if (account.isInRoom(who)) {
                         sender = username + "/" + this.defaultRes;
                         who = `${Util.prepJID(whoJid)}/${whoJid.resource}`;
