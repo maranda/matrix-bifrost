@@ -215,7 +215,7 @@ export class XmppJsAccount implements IBifrostAccount {
     public async joinChat(
         components: IChatJoinProperties,
         instance?: IBifrostInstance,
-        timeout: number = 20000,
+        timeout: number = 30000,
         setWaiting: boolean = true)
         : Promise<IConversationEvent|void> {
         if (!components.fullRoomName && (!components.room || !components.server)) {

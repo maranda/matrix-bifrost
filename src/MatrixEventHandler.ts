@@ -466,7 +466,7 @@ export class MatrixEventHandler {
                     let res: IConversationEvent;
                     try {
                         log.debug("Attempting to join chat");
-                        res = await acct.joinChat(paramSet, this.purple, 5000, false) as IConversationEvent;
+                        res = await acct.joinChat(paramSet, this.purple, 60000) as IConversationEvent;
                     } catch (ex) {
                         log.warn("Failed to join chat for plumbing:", ex);
                         throw Error("Failed to join chat");
@@ -494,7 +494,7 @@ export class MatrixEventHandler {
                                 getAcctRes.acct, cmdArgs, event.room_id, "",
                             );
                             await ProtoHacks.addJoinProps(protocol.id, joinParamSet, userId, intent);
-                            await getAcctRes.acct.joinChat(joinParamSet!, this.purple, 5000, false);
+                            await getAcctRes.acct.joinChat(joinParamSet!, this.purple, 60000);
                         }));
                     } catch (ex) {
                         log.warn("Syncing users to newly plumbed room failed: ", ex);
@@ -864,7 +864,7 @@ E.g. \`${command} ${acct.protocol.id}\` ${required.join(" ")} ${optional.join(" 
                     if (joinEvent.account.username === acct.name &&
                         acct.protocol.id === joinEvent.account.protocol_id) {
                         log.debug("Account signed in, joining room");
-                        const p = acct.joinChat(properties, this.purple, 5000) as Promise<any>;
+                        const p = acct.joinChat(properties, this.purple, 60000) as Promise<any>;
                         acct.setJoinPropertiesForRoom(name, properties);
                         this.purple.removeListener("account-signed-on", cb);
                         resolve(p);
