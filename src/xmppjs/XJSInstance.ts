@@ -999,23 +999,6 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             return;
         }
 
-        if (delta.changed.includes("kick")) {
-            log.info("Got kick for user");
-            this.emit((delta.status && delta.status!.ours) ? "chat-kick" : "chat-user-kick", {
-                conv: {
-                    name: convName,
-                },
-                account: {
-                    protocol_id: XMPP_PROTOCOL.id,
-                    username,
-                },
-                sender: stanza.attrs.from,
-                state: "kick",
-                gatewayAlias,
-            } as IUserStateChanged);
-            return;
-        }
-
         if (delta.changed.includes("online")) {
             if (delta.status && delta.isSelf && localAcct) {
                 // Always emit this.
