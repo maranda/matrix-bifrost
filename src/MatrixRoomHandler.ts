@@ -518,8 +518,10 @@ export class MatrixRoomHandler {
             } else if (data.state === "kick") {
                 await intent.kick(roomId, senderMatrixUser.getId(), data.reason || undefined);
             } else if (data.state === "left") {
-                if (this.config.tuning.limitStateChanges && (!data.gatewayAlias && !data.banner && !data.kicker && !data.technical)) {
-                    log.info(`No-Oping leave for ${data.sender} as state changes are limited`);
+                if (this.config.tuning.limitStateChanges &&
+                    (!data.gatewayAlias && !data.banner && (!data.kicker || (data.kicker && data.technical)))
+                ) {
+                    log.info(`No-Oping ${data.kicker ? "kick" : "leave"} for ${data.sender} as state changes are limited`);
                     return;
                 }
                 await intent.leave(roomId, data.reason || undefined);
