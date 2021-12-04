@@ -231,7 +231,7 @@ export class XmppJsAccount implements IBifrostAccount {
         const from = `${this.remoteId}/${this.resource}`;
         log.debug(`joinChat:`, this.remoteId, components);
         if (this.isInRoom(roomName)) {
-            log.info(`Didn't join ${to} from ${from} already joined`);
+            log.debug(`Didn't join ${to} from ${from}, already joined`);
             this.xmpp.emit("clean-remote-doppleganger", {
                 sender: to,
                 protocol: this.xmpp.getProtocol(XMPP_PROTOCOL.id),
@@ -249,7 +249,7 @@ export class XmppJsAccount implements IBifrostAccount {
             };
         }
         if (await this.selfPing(to)) {
-            log.info(`Didn't join ${to} from ${from} self ping says we are joined`);
+            log.info(`Didn't join ${to} from ${from}, self ping says we are joined`);
             this.roomHandles.set(roomName, components.handle);
             this.roomNicks.add(to);
             this.xmpp.emit("clean-remote-doppleganger", {
