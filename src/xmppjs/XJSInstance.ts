@@ -1013,6 +1013,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 state: "kick",
                 gatewayAlias,
             } as IUserStateChanged);
+            return;
         }
 
         if (delta.changed.includes("online")) {
