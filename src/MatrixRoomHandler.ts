@@ -489,6 +489,11 @@ export class MatrixRoomHandler {
             this.config.bridge.domain,
             this.config.bridge.userPrefix,
         );
+        if (senderMatrixUser.getId().match(/.*=fffd.*/) && data.state === "joined") {
+            log.warn(`Didn't handle join for ${data.sender} as the remote ghost contains malformed UTF16, deleting ghost`);
+            this.store.removeGhost(senderMatrixUser.getId(), protocol, data.sender);
+            return; // Hack, just no-op joins for malformed UTF puppets
+        }
         const intentUser = (typeof(data.kicker) === "string") ? protocol.getMxIdForProtocol(
             data.kicker,
             this.config.bridge.domain,
