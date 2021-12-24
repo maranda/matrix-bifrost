@@ -655,7 +655,11 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                     }
                     if (localAcct === undefined) {
                         log.warn(`No account defined for ${userId}, registering new account.`);
-                        localAcct = await this.autoRegister!.registerUser(XMPP_PROTOCOL.id, userId) as XmppJsAccount;
+                        try {
+                            localAcct = await this.autoRegister!.registerUser(XMPP_PROTOCOL.id, userId) as XmppJsAccount;
+                        } catch (ex) {
+                            log.error("Failed to reverse register user:", ex);
+                        }
                     }
                     const anonJid = this.gateway!.getAnonIDForJID(convName, from);
                     if (anonJid) {

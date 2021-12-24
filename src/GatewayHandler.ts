@@ -231,7 +231,9 @@ export class GatewayHandler {
                 // the server setting the global displayname.
                 setTimeout(
                     async () => {
-                        await intent.setRoomUserProfile(roomId, {displayname: data.nick});
+                        await intent.setRoomUserProfile(roomId, { displayname: data.nick }).catch((err) => {
+                            log.warn("Failed to set room user profile on join:", err);
+                        });
                     },
                     1000,
                 );
@@ -250,7 +252,9 @@ export class GatewayHandler {
             // If the user is already in the room (e.g. XMPP member with a second device), don't part them.
             const alreadyInRoom = roomName && this.purple.gateway.memberInRoom(roomName, intentUser);
             if (roomId && !alreadyInRoom) {
-                intent.leave(roomId);
+                intent.leave(roomId).catch((err) => {
+                    log.error("Failed to part user after failing to join:", err);
+                });
             }
             log.warn("Failed to join room:", ex.message);
             await this.purple.gateway.onRemoteJoin(ex.message, data.join_id, undefined, undefined);

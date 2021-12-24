@@ -69,7 +69,9 @@ export class MatrixRoomHandler {
             const memberlist = Object.keys((await this.bridge.getBot().getJoinedMembers(roomId)));
             if (!memberlist.includes(matrixUser.getId())) {
                 log.debug(`Invited ${matrixUser.getId()} to a chat they tried to join`);
-                await intent.invite(roomId, matrixUser.getId());
+                await intent.invite(roomId, matrixUser.getId()).catch((err) => {
+                    log.err(`Failed to invite user ${matrixUser.getId()} into ${roomId}`);
+                });
             }
         });
         purple.on("received-im-msg", this.handleIncomingIM.bind(this));

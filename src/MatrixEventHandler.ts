@@ -195,7 +195,9 @@ export class MatrixEventHandler {
                 const ghostIntent = this.bridge.getIntent(event.state_key);
                 // If the join fails to join because it's not registered, it tries to get invited which will fail.
                 log.debug(`Joining ${event.state_key} to ${event.room_id}.`);
-                await ghostIntent.join(event.room_id);
+                await ghostIntent.join(event.room_id).catch((err) => {
+                    log.error("Failed to join ghost:", err);
+                });
                 const remoteId = Buffer.from(
                     `${event.sender}:${remoteData.protocol}:${remoteData.recipient}`,
                 ).toString("base64");
