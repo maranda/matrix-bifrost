@@ -70,7 +70,7 @@ export class MatrixRoomHandler {
             if (!memberlist.includes(matrixUser.getId())) {
                 log.debug(`Invited ${matrixUser.getId()} to a chat they tried to join`);
                 await intent.invite(roomId, matrixUser.getId()).catch((err) => {
-                    log.err(`Failed to invite user ${matrixUser.getId()} into ${roomId}`);
+                    log.error(`Failed to invite user ${matrixUser.getId()} into ${roomId}`);
                 });
             }
         });
