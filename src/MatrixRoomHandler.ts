@@ -680,11 +680,14 @@ export class MatrixRoomHandler {
         const remoteEntry = await this.store.getGroupRoomByRemoteData(remoteData);
         const intent = this.bridge.getIntent(senderMatrixUser.getId());
         try {
-            intent.leave(remoteEntry.matrix?.getId(), "Doppleganger cleaned up");
+            intent.leave(remoteEntry.matrix?.getId(), "Doppleganger cleaned up").catch((err) => {
+                log.debug("User probably doesn't exist:", err);
+            }).finally(() => {
+                this.store.removeGhost(senderMatrixUser.getId(), data.protocol, data.sender);
+            });
             log.debug(`Removing detected doppleganger ${data.sender} -> ${senderMatrixUser.getId()}`);
         } catch (ex) {
             log.warn(`Failed cleaning doppleganger: ${ex}`);
         }
-        this.store.removeGhost(senderMatrixUser.getId(), data.protocol, data.sender);
     }
 }
