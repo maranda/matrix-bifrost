@@ -536,7 +536,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         const from = stanza.attrs.from ? jid(stanza.attrs.from) : null;
         const to = stanza.attrs.to ? jid(stanza.attrs.to) : null;
 
-        const isOurs = to !== null && to.domain === this.myAddress.domain;
+        const isOurs = (to !== null && to !== undefined) && to.domain === this.myAddress.domain;
         log.info(`Got ${stanza.name} from=${from} to=${to} isOurs=${isOurs}`);
         const alias = isOurs && to!.local.startsWith("#") && this.serviceHandler.parseAliasFromJID(to!) || null;
         if (alias && !this.gateway) {
