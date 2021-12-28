@@ -306,7 +306,7 @@ export class StzaMessage extends StzaBase {
         // XEP-0308
         const replaces = this.replacesId ? `<replace id='${this.replacesId}' xmlns='urn:xmpp:message-correct:0'/>` : "";
         return `<message from="${this.from}" to="${this.to}" id="${this.id}" ${type}>`
-            + `${this.html}<body xmlns='http://www.w3.org/1999/xhtml'>${encode(this.body)}</body>${attachments}${markable}${replaces}</message>`;
+             + `${this.html}<body>${encode(this.body)}</body>${attachments}${markable}${replaces}</message>`;
     }
 }
 
