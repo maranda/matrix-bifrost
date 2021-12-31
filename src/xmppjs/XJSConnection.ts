@@ -1,4 +1,4 @@
-import {Component} from "@xmpp/component-core";
+import { Component, ComponentTLS } from "@xmpp/component-core";
 import Reconnect from "@xmpp/reconnect";
 
 export interface IXJSConnectionOptions {
@@ -9,9 +9,10 @@ export interface IXJSConnectionOptions {
 
 export class XJSConnection {
     public static connect(options: IXJSConnectionOptions) {
-        const {password, service, domain} = options;
+        const { password, service, domain } = options;
 
-        const entity = new Component({service, domain});
+        const entity = service.startsWith("xmpps") ?
+            new ComponentTLS({ service, domain }) : new Component({ service, domain });
 
         const reconnect = Reconnect({entity});
 
