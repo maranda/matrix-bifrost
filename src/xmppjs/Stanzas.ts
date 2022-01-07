@@ -3,6 +3,7 @@ import { v4 as uuid } from "uuid";
 import * as he from "html-entities";
 import { IBasicProtocolMessage } from "../MessageFormatter";
 import { XMPPFeatures, XMPPStatusCode } from "./XMPPConstants";
+import { Util } from "../Util";
 
 export function encode(text) {
     return he.encode(text, { level: "xml", mode: "nonAscii"});
@@ -288,17 +289,32 @@ export class StzaMessage extends StzaBase {
             this.body = this.attachments[0];
         }
         // Remove mxID trailer in replies if it's too long
+        const catchPrefix = /@_([a-zA-Z0-9]+)_.*/;
         const trailRe = /^> <(@[a-zA-Z0-9_.=-]+:[a-zA-Z0-9.-]+)> /;
         const trailMatch = this.body.match(trailRe);
-        if (trailMatch && trailMatch[1].length >= 25) {
-            this.body = this.body.replace(trailRe, "> ");
+        if (trailMatch) {
+            const hasPrefix = trailMatch[1].match(catchPrefix);
+            const prefix = hasPrefix ? hasPrefix[1] : null;
+            const nickname = prefix ? Util.getResourceFromMxid(trailMatch[1], prefix) : null;
+            if (nickname) {
+                this.body = this.body.replace(trailRe, `> <${nickname}> `);
+            } else if (trailMatch[1].length > 25) {
+                this.body = this.body.replace(trailRe, "> ");
+            }
         }
         // Also fix the trailer into XHTML-IM if present
         if (this.html !== "") {
-            const htrailRe = /(.*<a href=['"](http|https):\/\/matrix.to\/#\/@.*['"]>)(@[a-zA-Z0-9_.=-]+:[a-zA-Z0-9.-]+)(<\/a>.*)/;
+            const htrailRe = /(<a href=['"](http|https):\/\/matrix.to\/#\/@.*['"]>)(@[a-zA-Z0-9_.=-]+:[a-zA-Z0-9.-]+)(<\/a>)/g;
             const htrailMatch = this.html.match(htrailRe);
-            if (htrailMatch && htrailMatch[3].length >= 25) {
-                this.html = this.html.replace(htrailRe, "$1user$4");
+            if (htrailMatch) {
+                const hasPrefix = htrailMatch[3].match(catchPrefix);
+                const prefix = hasPrefix ? hasPrefix[1] : null;
+                const nickname = prefix ? Util.getResourceFromMxid(htrailMatch[3], prefix) : null;
+                if (nickname) {
+                    this.html = this.html.replace(htrailRe, `<em>${nickname}</em>`);
+                } else if (htrailMatch[3].length > 25) {
+                    this.html = this.html.replace(htrailRe, "<em>User</em>");
+                }
             }
         }
         // XEP-0333

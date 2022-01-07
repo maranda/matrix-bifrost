@@ -1,5 +1,5 @@
 import { IChatJoinProperties } from "./bifrost/Events";
-import { Intent, WeakEvent } from "matrix-appservice-bridge";
+import { Intent, MatrixUser, WeakEvent } from "matrix-appservice-bridge";
 import { JID } from "@xmpp/jid";
 import * as crypto from "crypto";
 
@@ -50,6 +50,21 @@ export class Util {
         return userId.replace(/(=[0-9a-f]{2,4})/g, (code) =>
             String.fromCharCode(parseInt(code.substr(1), 16)),
         );
+    }
+
+    public static getResourceFromMxid(mxid: string, prefix: string): string {
+        const uName = this.unescapeUserId(new MatrixUser(mxid, {}, false).localpart);
+        const rPrefix = prefix ? `(${prefix})` : "";
+        let match = (new RegExp(`^${rPrefix}(.+\/)?(.+)?@(.+)$`)).exec(uName);
+        if (!match) {
+            match = (new RegExp(`^${rPrefix}(.+\/)?([^@]+)$`)).exec(uName);
+            if (!match) {
+                return null;
+            }
+        }
+        const resource = match[2] ? match[2].substr(
+            0, match[2].length - "/".length) : "";
+        return resource === "" ? null : resource;
     }
 
     public static async getMessagesBeforeJoin(
