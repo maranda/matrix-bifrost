@@ -316,9 +316,6 @@ export class StzaMessage extends StzaBase {
                     this.html = this.html.replace(htrailRe, "<em>User</em>");
                 }
             }
-            // and void links from nameplates
-            const hplateReG = /href=['"](http|https):\/\/matrix.to\/#\/@.*['"]/g;
-            this.html = this.html.replace(hplateReG, `href="#"`);
         }
         // XEP-0333
         const markable = this.markable ? "<markable xmlns='urn:xmpp:chat-markers:0'/>" : "";
