@@ -37,6 +37,7 @@ export class MatrixRoomHandler {
     private accountRoomLock: Set<string>;
     private remoteEventIdMapping: Map<string, string>; // remote_id -> event_id
     private roomCreationLock: Map<string, Promise<RoomBridgeStoreEntry>>;
+    private remoteEntriesCache: Map<IRemoteGroupData, any>;
     constructor(
         private purple: IBifrostInstance,
         private profileSync: ProfileSync,
@@ -46,6 +47,7 @@ export class MatrixRoomHandler {
     ) {
         this.accountRoomLock = new Set();
         this.roomCreationLock = new Map();
+        this.remoteEntriesCache = new Map();
         if (this.purple.needsDedupe() || this.purple.needsAccountLock()) {
             purple.on("chat-joined", this.onChatJoined.bind(this));
         }
@@ -677,7 +679,13 @@ export class MatrixRoomHandler {
             protocol_id: data.protocol.id,
             room_name: data.roomName,
         };
-        const remoteEntry = await this.store.getGroupRoomByRemoteData(remoteData);
+        let remoteEntry: RoomBridgeStoreEntry;
+        if (this.remoteEntriesCache.has(remoteData)) {
+            remoteEntry = this.remoteEntriesCache.get(remoteData);
+        } else {
+            remoteEntry = await this.store.getGroupRoomByRemoteData(remoteData);
+            this.remoteEntriesCache.set(remoteData, remoteEntry);
+        }
         const intent = this.bridge.getIntent(senderMatrixUser.getId());
         try {
             intent.leave(remoteEntry.matrix?.getId(), "Doppleganger cleaned up").catch((err) => {
