@@ -307,9 +307,9 @@ export class StzaMessage extends StzaBase {
             const htrailRe = /(<a href=['"]#['"]>)(@[a-zA-Z0-9_.=-]+:[a-zA-Z0-9.-]+)(<\/a>)/;
             const htrailMatch = this.html.match(htrailRe);
             if (htrailMatch) {
-                const hasPrefix = htrailMatch[3].match(catchPrefix);
+                const hasPrefix = htrailMatch[2].match(catchPrefix);
                 const prefix = hasPrefix ? hasPrefix[1] : null;
-                const nickname = prefix ? Util.getResourceFromMxid(htrailMatch[3], prefix) : null;
+                const nickname = prefix ? Util.getResourceFromMxid(htrailMatch[2], prefix) : null;
                 if (nickname) {
                     this.html = this.html.replace(htrailRe, `<em>${nickname}</em>`);
                 } else if (htrailMatch[3].length > 25) {
