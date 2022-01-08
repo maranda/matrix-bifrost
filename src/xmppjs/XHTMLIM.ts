@@ -48,6 +48,8 @@ const VALID_ELEMENT_ATTRIBUTES = {
     img: ["class", "id", "title", "style", "alt", "height", "longdesc", "src", "width"],
 };
 
+const matrixToProfile = /http.:\/\/matrix.to\/#\/@.*/;
+
 export class XHTMLIM {
     public static HTMLToXHTML(html: string) {
         let xhtml = "";
@@ -67,6 +69,9 @@ export class XHTMLIM {
                     attribs.xmlns = XMLNS;
                 } else if (tagname === "body") {
                     attribs.xmlns = W3C;
+                } else if (tagname === "a" && attribs.href) {
+                    // strip out matrix profile links
+                    attribs.href = attribs.href.match(matrixToProfile) ? "#" : attribs.href;
                 }
                 xhtml += `<${tagname}${Object.keys(attribs).map((k) => ` ${k}='${attribs[k]}'`).join("")}>`;
             },

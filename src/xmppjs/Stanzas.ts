@@ -304,7 +304,7 @@ export class StzaMessage extends StzaBase {
         }
         // Also fix the trailer into XHTML-IM if present
         if (this.html !== "") {
-            const htrailRe = /(<a href=['"](http|https):\/\/matrix.to\/#\/@.*['"]>)(@[a-zA-Z0-9_.=-]+:[a-zA-Z0-9.-]+)(<\/a>)/;
+            const htrailRe = /(<a href=['"]#['"]>)(@[a-zA-Z0-9_.=-]+:[a-zA-Z0-9.-]+)(<\/a>)/;
             const htrailMatch = this.html.match(htrailRe);
             if (htrailMatch) {
                 const hasPrefix = htrailMatch[3].match(catchPrefix);
