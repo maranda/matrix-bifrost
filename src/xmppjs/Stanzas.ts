@@ -316,14 +316,6 @@ export class StzaMessage extends StzaBase {
                     this.html = this.html.replace(htrailRe, "<em>User</em>");
                 }
             }
-            // catch also all nameplate occurrencies and strip the links
-            const hplateRe = /(<a href=['"](http|https):\/\/matrix.to\/#\/(@.*)['"]>)(.+)(<\/a>)/;
-            const hplateReG = /<a href=['"](http|https):\/\/matrix.to\/#\/@.*['"]>.+<\/a>/g;
-            const hplateCount = this.html.match(hplateReG);
-            for (let i = 0; i < hplateCount.length; i++) {
-                const subMatch = hplateCount[i].match(hplateRe);
-                this.html = this.html.replace(hplateRe, `<em>${subMatch[4]}</em>`);
-            }
         }
         // XEP-0333
         const markable = this.markable ? "<markable xmlns='urn:xmpp:chat-markers:0'/>" : "";
