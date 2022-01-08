@@ -289,7 +289,7 @@ export class StzaMessage extends StzaBase {
             this.body = this.attachments[0];
         }
         // Remove mxID trailer in replies if it's too long
-        const catchPrefix = /@_([a-zA-Z0-9]+)_.*/;
+        const catchPrefix = /@(_[a-zA-Z0-9]+_).*/;
         const trailRe = /^> <(@[a-zA-Z0-9_.=-]+:[a-zA-Z0-9.-]+)> /;
         const trailMatch = this.body.match(trailRe);
         if (trailMatch) {
