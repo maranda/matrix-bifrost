@@ -215,6 +215,15 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         return;
     }
 
+    public isDoppleganger(j: JID): boolean {
+        for (const acct of this.accounts.values()) {
+            if (acct.roomNicks.has(j.toString())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public getBuddyFromChat(conv: any, buddy: string): any {
         return undefined;
     }
@@ -1019,17 +1028,13 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 } as IChatJoined);
                 return;
             }
-            let negate = false;
-            for (const acct of this.accounts.values()) {
-                if (acct.roomNicks.has(from.toString())) {
-                    negate = true;
-                    break;
-                }
+            if (this.isDoppleganger(from)) {
+                // this is a doppleganger of our don't handle it
+                return;
             }
             if (delta.status && !delta.status.ours) {
-                if (this.isWaitingToJoin(to) === from.toString() || negate) {
-                    // An account is waiting to join this room, 
-                    // or we're handling a local ghost so hold off on the join
+                if (this.isWaitingToJoin(to) === from.toString()) {
+                    // An account is waiting to join this room
                     return;
                 }
                 this.emit("chat-user-joined", {
