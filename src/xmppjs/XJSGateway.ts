@@ -668,7 +668,7 @@ export class XmppJsGateway implements IGateway {
     }
 
     private updateMatrixMemberListForRoom(chatName: string, room: IGatewayRoom, allowForJoin = false) {
-        if (!allowForJoin && this.members.getMatrixMembers(chatName)) {
+        if (!allowForJoin && this.members.getMatrixMembers(chatName).length !== 0) {
             return;
         }
         let joined = 0;
