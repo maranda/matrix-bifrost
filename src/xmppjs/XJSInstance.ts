@@ -535,7 +535,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
 
     private async onStanza(stanza: Element) {
         const startedAt = Date.now();
-        const id = stanza.attrs.id = stanza.attrs.id || this.generateIdforMsg(stanza);
+        const id = stanza.attrs.id || this.generateIdforMsg(stanza);
         if (this.seenMessages.has(id)) {
             return;
         } else if (stanza.name === "message" ||
