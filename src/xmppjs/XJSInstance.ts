@@ -692,8 +692,8 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             // We got an error back from sending a message, let's handle it.
             const error = stanza.getChild("error")!;
             log.warn(`Message ${stanza.attrs.id} returned an error: `, error.toString());
-            if (error.attrs.code === "406" && error.getChild("not-acceptable") && localAcct) {
-                log.warn("Got 406/not-acceptable, rejoining room..");
+            if (error.getChild("not-acceptable") && localAcct) {
+                log.warn("Got not-acceptable, rejoining room..");
                 // https://xmpp.org/extensions/xep-0045.html#message says we
                 // should treat this as the user not being joined.
                 await localAcct.rejoinChat(convName);
