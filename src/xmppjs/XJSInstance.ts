@@ -536,7 +536,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     private async onStanza(stanza: Element) {
         const startedAt = Date.now();
         const id = stanza.attrs.id || this.generateIdforMsg(stanza);
-        if (this.seenMessages.has(id) && (stanza.name === "presence" && stanza.attrs.type !== "unavailable")) {
+        if (this.seenMessages.has(id) && stanza.attrs.type !== "unavailable") {
             return;
         }
         if ((stanza.name === "message" || stanza.name === "presence") &&
