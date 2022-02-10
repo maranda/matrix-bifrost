@@ -536,10 +536,11 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     private async onStanza(stanza: Element) {
         const startedAt = Date.now();
         const id = stanza.attrs.id || this.generateIdforMsg(stanza);
-        if (this.seenMessages.has(id)) {
+        if (this.seenMessages.has(id) && stanza.name !== "presence" && stanza.attrs.type !== "unavailable") {
             return;
-        } else if (stanza.name === "message" ||
-            (stanza.name === "presence" && stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error")) {
+        }
+        if ((stanza.name === "message" || stanza.name === "presence") &&
+            stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
             this.xmppAddSentMessage(id);
         }
         log.debug("Stanza:", stanza.toJSON());
