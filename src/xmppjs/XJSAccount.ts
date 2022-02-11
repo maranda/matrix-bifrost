@@ -64,15 +64,25 @@ export class XmppJsAccount implements IBifrostAccount {
                             return;
                         }
                         // make really sure the handle is not null
+                        let handle: string;
                         if (!this.roomHandles.has(roomName)) {
                             log.warn(`${this.remoteId} has no handler for ${roomName}`);
-                            return;
+                            const handleRegex = /^(.*)\/(.*)$/;
+                            for (const roomNick of this.roomNicks.values()) {
+                                const match = roomNick.match(handleRegex);
+                                if (match && match[1] === roomName) {
+                                    handle = match[2];
+                                }
+                                break;
+                            }
                         }
-                        this.joinChat({
-                            fullRoomName: roomName,
-                            handle: this.roomHandles.get(roomName)!,
-                            avatar_hash: this.avatarHash,
-                        });
+                        if (this.roomHandles.get(roomName) || handle) {
+                            this.joinChat({
+                                fullRoomName: roomName,
+                                handle: this.roomHandles.get(roomName) || handle,
+                                avatar_hash: this.avatarHash,
+                            });
+                        }
                     });
                 }
             });
