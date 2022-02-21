@@ -529,8 +529,8 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             return Buffer.from(`${stanza.getAttr("from")}${body}`).toString("base64");
         }
 
-        // Hack: try to handle choppy XMPP clients that don't properly add id attributes on MUC join presences
-        const x = stanza.getChild("x", "http://jabber.org/protocol/muc#user");
+        // Hack: try to handle choppy XMPP clients that don't properly add id attributes on MUC gateway join presences
+        const x = stanza.getChild("x", "http://jabber.org/protocol/muc");
         if (stanza.name === "presence" && x) {
             const dT = new Date();
             return Buffer.from(stanza.toString() + Math.floor(dT.getTime()/1000).toString()).toString("base64");
