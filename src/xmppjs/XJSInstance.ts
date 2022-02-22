@@ -523,7 +523,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         return res;
     }
 
-    private generateIdforMsg(stanza: Element) {
+    public generateIdforMsg(stanza: Element) {
         const body = stanza.getChildText("body");
         if (body) {
             return Buffer.from(`${stanza.getAttr("from")}${body}`).toString("base64");

@@ -70,13 +70,14 @@ export class XmppJsGateway implements IGateway {
         const isMucType = stanza.getChildByAttr("xmlns", "http://jabber.org/protocol/muc");
         log.info(`Handling ${stanza.name} from=${stanza.attrs.from} to=${stanza.attrs.to} for ${gatewayAlias}`);
         if ((delta.changed.includes("online") || delta.changed.includes("newdevice")) && isMucType) {
-            this.addStanzaToCache(stanza);
+            const id = stanza.attrs.id || this.xmpp.generateIdforMsg(stanza);
+            this.addStanzaToCache(stanza, id);
             // Gateways are special.
             // We also want to drop the resource from the sender.
             const from = jid(stanza.attrs.from);
             const sender = Util.prepJID(from);
             this.xmpp.emit("gateway-joinroom", {
-                join_id: stanza.attrs.id,
+                join_id: id,
                 roomAlias: gatewayAlias,
                 sender,
                 nick: to.resource,
@@ -138,9 +139,9 @@ export class XmppJsGateway implements IGateway {
         }
     }
 
-    public addStanzaToCache(stanza: Element) {
-        this.stanzaCache.set(stanza.attrs.id, stanza);
-        log.debug("Added cached stanza for " + stanza.attrs.id);
+    public addStanzaToCache(stanza: Element, id: string) {
+        this.stanzaCache.set(id, stanza);
+        log.debug("Added cached stanza for " + id);
     }
 
     public memberInRoom(chatName: string, matrixId: string) {
