@@ -8,21 +8,10 @@ import { IGatewayRoomQuery, IGatewayPublicRoomsQuery } from "../bifrost/Events";
 import { StzaIqDiscoInfo, StzaIqPing, StzaIqDiscoItems, StzaIqSearchFields, SztaIqError, StzaIqPingError, encode } from "./Stanzas";
 import { IPublicRoomsResponse } from "../MatrixTypes";
 import { IConfigBridge } from "../Config";
-import { XMPPFeatures } from "./XMPPConstants";
+import { BridgeVersion, XMPPFeatures } from "./XMPPConstants";
 import { Util } from "../Util";
 
 const log = Logging.get("ServiceHandler");
-
-let version = "Unknown";
-try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    version = require("../../../package.json").version;
-    if (version !== "Unknown") {
-        version + ".arianet.1"; // we append our version stub here
-    }
-} catch (ex) {
-    // This might not exist.
-}
 
 const MAX_AVATARS = 1024;
 
@@ -149,7 +138,7 @@ export class ServiceHandler {
             },
             [
                 x("name", undefined, "matrix-bifrost"),
-                x("version", undefined, version),
+                x("version", undefined, BridgeVersion),
             ],
             ),
             ));

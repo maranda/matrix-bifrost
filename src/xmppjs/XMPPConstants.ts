@@ -20,3 +20,5 @@ export enum XMPPFeatures {
     XHTMLIM = "http://jabber.org/protocol/xhtml-im",
     vCard = "vcard-temp",
 }
+
+export const BridgeVersion = "0.4.0.arianet.1"
