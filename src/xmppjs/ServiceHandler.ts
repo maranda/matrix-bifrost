@@ -17,6 +17,9 @@ let version = "Unknown";
 try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     version = require("../../../package.json").version;
+    if (version !== "Unknown") {
+        version + ".arianet.1"; // we append our version stub here
+    }
 } catch (ex) {
     // This might not exist.
 }
