@@ -513,10 +513,10 @@ export class MatrixEventHandler {
                 intent.leave(event.room_id);
             }
         } catch (ex) {
-            log.warn("Plumbing attempt didn't succeed:", ex);
+            log.warn("Plumbing operation didn't succeed:", ex);
             await intent.sendMessage(event.room_id, {
                 msgtype: "m.notice",
-                body: "Failed to bridge:" + ex,
+                body: "Error while handling command:" + ex,
             });
         }
     }
