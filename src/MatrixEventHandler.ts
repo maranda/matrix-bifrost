@@ -222,7 +222,7 @@ export class MatrixEventHandler {
         if (
             event.type === "m.room.message" &&
             event.content.msgtype === "m.text" &&
-            body?.startsWith("!purple")) {
+            body?.startsWith("!bifrost")) {
             // It's probably a room waiting to be given commands.
             if (this.config.provisioning.enablePlumbing) {
                 const args = body.split(" ");
@@ -436,7 +436,7 @@ export class MatrixEventHandler {
         }
         log.debug(`Handling plumbing command ${args} for ${event.room_id}`);
         // Check permissions
-        if (args[0] !== "!purple") {
+        if (args[0] !== "!bifrost") {
             return;
         }
         const requiredPl = this.config.provisioning.requiredUserPL;
@@ -460,9 +460,13 @@ export class MatrixEventHandler {
                     throw new Error("Protocol not found");
                 }
                 const {acct} = await this.getAccountForMxid(event.sender, protocol.id);
-                const paramSet = await this.getJoinParametersForCommand(acct, cmdArgs, event.room_id, "!purple bridge");
+                const paramSet = await this.getJoinParametersForCommand(acct, cmdArgs, event.room_id, "!bifrost bridge");
                 log.debug("Got appropriate param set", paramSet);
                 if (paramSet != null) {
+                    let roomExists = await this.store.getRoomEntryByMatrixId(event.room_id);
+                    if (roomExists) {
+                        throw new Error("Room already exists in the database");
+                    }
                     await ProtoHacks.addJoinProps(protocol.id, paramSet, event.sender, intent);
                     // We want to join the room to make sure it works.
                     let res: IConversationEvent;
@@ -502,6 +506,11 @@ export class MatrixEventHandler {
                         log.warn("Syncing users to newly plumbed room failed: ", ex);
                     }
                 }
+            } else if (args[1] === "leave") {
+                log.info(event.sender, "is unbridging", event.room_id);
+                await this.store.removeRoomByRoomId(event.room_id);
+                const intent = this.bridge.getIntent();
+                intent.leave(event.room_id);
             }
         } catch (ex) {
             log.warn("Plumbing attempt didn't succeed:", ex);
