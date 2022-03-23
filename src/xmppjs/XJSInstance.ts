@@ -62,6 +62,8 @@ class XmppProtocol extends BifrostProtocol {
 
 export const XMPP_PROTOCOL = new XmppProtocol();
 const SEEN_MESSAGES_SIZE = 16384;
+const XMPP_URI_GLOBAL_MATCH = /xmpp:[a-zA-Z0-9.-\u00c0-\u024f\u1e00-\u1eff]+@[a-zA-Z0-9.-]+/g;
+const XMPP_URI_SUB_MATCH = /xmpp:(.+)@([a-zA-Z0-9.-]+)/;
 
 export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     public readonly presenceCache: PresenceCache;
@@ -451,6 +453,21 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 originIsMatrix,
             } as IChatReadReceipt);
         });
+    }
+
+    private convertXMPPUris(body: string): string {
+        // attempt to convert XMPP URIs into matrix ones
+        const bodyMatches = body.match(XMPP_URI_GLOBAL_MATCH);
+        if (bodyMatches) {
+            for (const uri of bodyMatches) {
+                const portions = uri.match(XMPP_URI_SUB_MATCH);
+                if (portions.length === 3) {
+                    const mxId = XMPP_PROTOCOL.getMxIdForProtocol(portions[1], portions[2], this.config.bridge.userPrefix);
+                    body = body.replace(uri, "https://matrix.to/#/" + mxId);
+                }
+            }
+        }
+        return body;
     }
 
     private async getMucAvatar(room: string): Promise<Element> {
@@ -853,7 +870,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         }
 
         const message = {
-            body,
+            body: this.convertXMPPUris(body),
             formatted: [ ],
             id: stanza.attrs.id,
             original_message: replace ? replace.getAttr("id") : undefined,
@@ -867,7 +884,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             html = html.getChild("body") || html;
             message.formatted!.push({
                 type: "html",
-                body: html.toString(),
+                body: this.convertXMPPUris(html.toString()),
             });
         }
 
