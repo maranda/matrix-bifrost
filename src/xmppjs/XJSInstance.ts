@@ -462,8 +462,10 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             for (const uri of bodyMatches) {
                 const portions = uri.match(XMPP_URI_SUB_MATCH);
                 if (portions.length === 3) {
-                    const mxId = XMPP_PROTOCOL.getMxIdForProtocol(portions[1], portions[2], this.config.bridge.userPrefix);
-                    body = body.replace(uri, "https://matrix.to/#/" + mxId);
+                    const mxId = XMPP_PROTOCOL.getMxIdForProtocol(
+                        portions[1] + "=40" + portions[2], this.config.bridge.domain, this.config.bridge.userPrefix
+                    );
+                    body = body.replace(uri, "https://matrix.to/#/" + mxId.userId);
                 }
             }
         }
