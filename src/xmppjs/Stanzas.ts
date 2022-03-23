@@ -5,6 +5,10 @@ import { IBasicProtocolMessage } from "../MessageFormatter";
 import { XMPPFeatures, XMPPStatusCode } from "./XMPPConstants";
 import { Util } from "../Util";
 
+const REGEXP_AS_PREFIX = /@(_[a-zA-Z0-9]+_).*/;
+const REGEXP_HTML_TRAIL = /(<a href=['"]#['"]>)(@[a-zA-Z0-9_.=-]+:[a-zA-Z0-9.-]+)(<\/a>)/;
+const REGEXP_TEXT_TRAIL = /^> <(@[a-zA-Z0-9_.=-]+:[a-zA-Z0-9.-]+)> /;
+
 export function encode(text) {
     return he.encode(text, { level: "xml", mode: "nonAscii"});
 }
@@ -289,31 +293,28 @@ export class StzaMessage extends StzaBase {
             this.body = this.attachments[0];
         }
         // Remove mxID trailer in replies if it's too long
-        const catchPrefix = /@(_[a-zA-Z0-9]+_).*/;
-        const trailRe = /^> <(@[a-zA-Z0-9_.=-]+:[a-zA-Z0-9.-]+)> /;
-        const trailMatch = this.body.match(trailRe);
+        const trailMatch = this.body.match(REGEXP_TEXT_TRAIL);
         if (trailMatch) {
-            const hasPrefix = trailMatch[1].match(catchPrefix);
+            const hasPrefix = trailMatch[1].match(REGEXP_AS_PREFIX);
             const prefix = hasPrefix ? hasPrefix[1] : null;
             const nickname = prefix ? Util.getResourceFromMxid(trailMatch[1], prefix) : null;
             if (nickname) {
-                this.body = this.body.replace(trailRe, `> <${nickname}> `);
+                this.body = this.body.replace(REGEXP_TEXT_TRAIL, `> <${nickname}> `);
             } else if (trailMatch[1].length > 25) {
-                this.body = this.body.replace(trailRe, "> ");
+                this.body = this.body.replace(REGEXP_TEXT_TRAIL, "> ");
             }
         }
         // Also fix the trailer into XHTML-IM if present
         if (this.html !== "") {
-            const htrailRe = /(<a href=['"]#['"]>)(@[a-zA-Z0-9_.=-]+:[a-zA-Z0-9.-]+)(<\/a>)/;
-            const htrailMatch = this.html.match(htrailRe);
+            const htrailMatch = this.html.match(REGEXP_HTML_TRAIL);
             if (htrailMatch) {
-                const hasPrefix = htrailMatch[2].match(catchPrefix);
+                const hasPrefix = htrailMatch[2].match(REGEXP_AS_PREFIX);
                 const prefix = hasPrefix ? hasPrefix[1] : null;
                 const nickname = prefix ? Util.getResourceFromMxid(htrailMatch[2], prefix) : null;
                 if (nickname) {
-                    this.html = this.html.replace(htrailRe, `<em>${nickname}</em>`);
+                    this.html = this.html.replace(REGEXP_HTML_TRAIL, `<em>${nickname}</em>`);
                 } else if (htrailMatch[3].length > 25) {
-                    this.html = this.html.replace(htrailRe, "<em>User</em>");
+                    this.html = this.html.replace(REGEXP_HTML_TRAIL, "<em>User</em>");
                 }
             }
         }
