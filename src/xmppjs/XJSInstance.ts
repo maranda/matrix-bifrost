@@ -62,8 +62,8 @@ class XmppProtocol extends BifrostProtocol {
 
 export const XMPP_PROTOCOL = new XmppProtocol();
 const SEEN_MESSAGES_SIZE = 16384;
-const XMPP_URI_GLOBAL_MATCH = /xmpp:[a-zA-Z0-9.-\u00c0-\u024f\u1e00-\u1eff]+@[a-zA-Z0-9.-]+/g;
-const XMPP_URI_SUB_MATCH = /xmpp:(.+)@([a-zA-Z0-9.-]+)/;
+const XMPP_URI_GLOBAL_MATCH = /xmpp:[a-zA-Z0-9.-\u00c0-\u024f\u1e00-\u1eff]+@[a-zA-Z0-9.-]+(\?join)?/g;
+const XMPP_URI_SUB_MATCH = /xmpp:(.+)@([a-zA-Z0-9.-]+)(\?join)?/;
 
 export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     public readonly presenceCache: PresenceCache;
@@ -461,11 +461,16 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         if (bodyMatches) {
             for (const uri of bodyMatches) {
                 const portions = uri.match(XMPP_URI_SUB_MATCH);
-                if (portions.length === 3) {
-                    const mxId = XMPP_PROTOCOL.getMxIdForProtocol(
-                        portions[1] + "=40" + portions[2], this.config.bridge.domain, this.config.bridge.userPrefix
-                    );
-                    body = body.replace(uri, "https://matrix.to/#/" + mxId.userId);
+                if (portions.length >= 3) {
+                    let mxId;
+                    if (portions[3]) { // it's a MUC
+                        mxId = `#${this.config.bridge.userPrefix}${portions[1]}_${portions[2]}:${this.config.bridge.domain}`;
+                    } else {
+                        mxId = XMPP_PROTOCOL.getMxIdForProtocol(
+                            portions[1] + "=40" + portions[2], this.config.bridge.domain, this.config.bridge.userPrefix
+                        ).userId;
+                    }
+                    body = body.replace(uri, `https://matrix.to/#/${mxId}`);
                 }
             }
         }
@@ -650,7 +655,6 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             return false;
         }
     }
-
 
     private async handleMessageStanza(stanza: Element, alias: string|null) {
         if (!stanza.attrs.from || !stanza.attrs.to) {
