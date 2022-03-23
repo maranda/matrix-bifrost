@@ -62,8 +62,8 @@ class XmppProtocol extends BifrostProtocol {
 
 export const XMPP_PROTOCOL = new XmppProtocol();
 const SEEN_MESSAGES_SIZE = 16384;
-const XMPP_URI_GLOBAL_MATCH = /xmpp:[a-zA-Z0-9.-\u00c0-\u024f\u1e00-\u1eff]+@[a-zA-Z0-9.-]+(\?join)?/g;
-const XMPP_URI_SUB_MATCH = /xmpp:(.+)@([a-zA-Z0-9.-]+)(\?join)?/;
+const XMPP_URI_GLOBAL_MATCH = /xmpp:([\+a-zA-Z0-9.-\u00c0-\u024f\u1e00-\u1eff]+@)?[a-zA-Z0-9.-]+(\?join)?/g;
+const XMPP_URI_SUB_MATCH = /xmpp:((.+)@)?([a-zA-Z0-9.-]+)(\?join)?/;
 
 export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     public readonly presenceCache: PresenceCache;
@@ -461,14 +461,18 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         if (bodyMatches) {
             for (const uri of bodyMatches) {
                 const portions = uri.match(XMPP_URI_SUB_MATCH);
-                if (portions.length >= 3) {
+                if (portions.length === 5) {
                     let mxId;
-                    if (portions[3]) { // it's a MUC
-                        mxId = `#${this.config.bridge.userPrefix}${portions[1]}_${portions[2]}:${this.config.bridge.domain}`;
+                    if (portions[4]) { // it's a MUC
+                        mxId = portions[2] ?
+                            `#${this.config.bridge.userPrefix}${portions[2]}_${portions[3]}:${this.config.bridge.domain}` :
+                            `#${this.config.bridge.userPrefix}${portions[3]}:${this.config.bridge.domain}`;
                     } else {
-                        mxId = XMPP_PROTOCOL.getMxIdForProtocol(
-                            portions[1] + "=40" + portions[2], this.config.bridge.domain, this.config.bridge.userPrefix
-                        ).userId;
+                        mxId = portions[2] ?
+                            XMPP_PROTOCOL.getMxIdForProtocol(
+                                portions[2] + "=40" + portions[3], this.config.bridge.domain, this.config.bridge.userPrefix
+                            ).userId :
+                            `@${this.config.bridge.userPrefix}${portions[3]}:${this.config.bridge.domain}`;
                     }
                     body = body.replace(uri, `https://matrix.to/#/${mxId}`);
                 }
