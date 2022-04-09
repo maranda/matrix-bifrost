@@ -13,7 +13,7 @@ import { v4 as uuid } from "uuid";
 import { XHTMLIM } from "./XHTMLIM";
 import { StzaMessage, StzaIqPing, StzaPresenceJoin, StzaPresencePart, StzaIqVcardRequest } from "./Stanzas";
 
-const IDPREFIX = "pbridge";
+const IDPREFIX = "bifrost";
 const CONFLICT_SUFFIX = "[m]";
 const LASTSTANZA_CHECK_MS = 2 * 60000;
 const LASTSTANZA_MAXDURATION = 10 * 60000;
@@ -142,7 +142,7 @@ export class XmppJsAccount implements IBifrostAccount {
             // Send RR for message if we have the matrixId.
             this.xmpp.emitReadReciepts(msg.id, chatName, true);
         }
-        this.xmpp.xmppAddSentMessage(id);
+        this.xmpp.xmppAddSentMessage(id, xMsg);
         this.xmpp.xmppSend(xMsg);
         Metrics.remoteCall("xmpp.message.groupchat");
     }
@@ -217,6 +217,7 @@ export class XmppJsAccount implements IBifrostAccount {
                 throw new Error("User has no assigned handle for this room, we cannot rejoin!");
             }
             // we need to clean handles before attempting to rejoin
+            this.cleanedDG = 0;
             this.roomHandles.delete(fullRoomName);
             this.roomNicks.delete(`${fullRoomName}/${handle}`);
             await this.joinChat({

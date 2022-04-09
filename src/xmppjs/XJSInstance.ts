@@ -27,7 +27,7 @@ import { ServiceHandler } from "./ServiceHandler";
 import { XJSConnection } from "./XJSConnection";
 import { AutoRegistration } from "../AutoRegistration";
 import { XmppJsGateway } from "./XJSGateway";
-import { IStza, StzaBase, StzaIqDisco, StzaIqDiscoInfo, StzaIqPing, StzaIqPingError, StzaIqVcardRequest } from "./Stanzas";
+import { IStza, StzaBase, StzaIqDisco, StzaIqDiscoInfo, StzaIqPing, StzaIqPingError, StzaIqVcardRequest, StzaMessage } from "./Stanzas";
 import { Util } from "../Util";
 import { v4 as uuid } from "uuid";
 
@@ -72,6 +72,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     private myAddress!: JID;
     private accounts: Map<string, XmppJsAccount>;
     private seenMessages: Set<string>;
+    private sentMessageStanzas: Map<string, StzaMessage>;
     private defaultRes!: string;
     private connectionWasDropped: boolean;
     private bufferedMessages: {xmlMsg: Element|string, resolve: (res: Promise<void>) => void}[];
@@ -86,6 +87,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         this.accounts = new Map();
         this.bufferedMessages = [];
         this.seenMessages = new Set();
+        this.sentMessageStanzas = new Map();
         this.presenceCache = new PresenceCache();
         this.serviceHandler = new ServiceHandler(this, config.bridge);
         this.connectionWasDropped = false;
@@ -199,12 +201,18 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         return p;
     }
 
-    public xmppAddSentMessage(id: string) {
+    public xmppAddSentMessage(id: string, stanza?: StzaMessage) {
         this.seenMessages.add(id);
+        if (stanza) {
+            this.sentMessageStanzas.set(id, stanza);
+        }
         // Remove old entries
         if (this.seenMessages.size >= SEEN_MESSAGES_SIZE) {
             const arr = [...this.seenMessages].slice(0, 50);
-            arr.forEach(this.seenMessages.delete.bind(this.seenMessages));
+            arr.forEach((id) => {
+                this.sentMessageStanzas.delete(id);
+                this.seenMessages.delete(id);
+            });
         }
     }
 
@@ -731,7 +739,11 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 // https://xmpp.org/extensions/xep-0045.html#message says we
                 // should treat this as the user not being joined.
                 await localAcct.rejoinChat(convName);
-                // TODO: Resend the message?
+                // Resend the message
+                const xMsg = this.sentMessageStanzas.get(stanza.attrs.id);
+                if (xMsg) {
+                    this.xmppSend(xMsg);
+                }
             }
         }
         const type = stanza.attrs.type;
