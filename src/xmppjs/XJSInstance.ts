@@ -73,6 +73,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     private accounts: Map<string, XmppJsAccount>;
     private seenMessages: Set<string>;
     private sentMessageStanzas: Map<string, StzaMessage>;
+    private resentMessageStanzas: Set<string>;
     private defaultRes!: string;
     private connectionWasDropped: boolean;
     private bufferedMessages: {xmlMsg: Element|string, resolve: (res: Promise<void>) => void}[];
@@ -88,6 +89,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         this.bufferedMessages = [];
         this.seenMessages = new Set();
         this.sentMessageStanzas = new Map();
+        this.resentMessageStanzas = new Set();
         this.presenceCache = new PresenceCache();
         this.serviceHandler = new ServiceHandler(this, config.bridge);
         this.connectionWasDropped = false;
@@ -210,6 +212,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         if (this.seenMessages.size >= SEEN_MESSAGES_SIZE) {
             const arr = [...this.seenMessages].slice(0, 50);
             arr.forEach((id) => {
+                this.resentMessageStanzas.delete(id);
                 this.sentMessageStanzas.delete(id);
                 this.seenMessages.delete(id);
             });
@@ -741,7 +744,8 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 await localAcct.rejoinChat(convName);
                 // Resend the message
                 const xMsg = this.sentMessageStanzas.get(stanza.attrs.id);
-                if (xMsg) {
+                if (xMsg && !this.resentMessageStanzas.has(stanza.attrs.id)) {
+                    this.resentMessageStanzas.add(stanza.attrs.id);
                     this.xmppSend(xMsg);
                 }
             }
