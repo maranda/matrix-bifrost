@@ -9,7 +9,7 @@ export interface IGateway extends IProfileProvider {
         sender: string, body: IBasicProtocolMessage, room: IGatewayRoom,
     ): void;
     sendMatrixMembership(
-        chatName: string, event: MatrixMembershipEvent, room: IGatewayRoom,
+        chatName: string, event: MatrixMembershipEvent, room: IGatewayRoom, rename?: boolean,
     ): void;
     sendStateChange(
         chatName: string, sender: string, type: "topic"|"name"|"avatar", room: IGatewayRoom,

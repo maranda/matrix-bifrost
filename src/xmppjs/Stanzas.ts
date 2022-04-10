@@ -116,6 +116,7 @@ export class StzaPresenceItem extends StzaPresence {
         public jid: string = "",
         itemType: string = "",
         public avatarHash?: string,
+        public newNick?: string,
     ) {
         super(from, to, id, itemType);
         this.statusCodes = new Set();
@@ -130,8 +131,9 @@ export class StzaPresenceItem extends StzaPresence {
 
     public get xContent() {
         const jid = this.jid ? ` jid='${this.jid}'` : "";
+        const nick = this.newNick ? ` nick='${this.newNick}'` : "";
         let xml = [...this.statusCodes].map((s) => `<status code='${s}'/>`).join("");
-        xml += `<item affiliation='${this.affiliation}'${jid} role='${this.role}'`;
+        xml += `<item affiliation='${this.affiliation}'${jid}${nick} role='${this.role}'`;
         if (!this.actor && !this.reason) {
             return xml + "/>";
         }

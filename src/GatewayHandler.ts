@@ -149,6 +149,7 @@ export class GatewayHandler {
         if (!context.matrix) {
             return;
         }
+        let rename: boolean = false;
         const intent = this.bridge.getIntent();
         const room = await this.getVirtualRoom(context.matrix.getId(), intent);
         if (this.bridge.getBot().isRemoteUser(event.state_key)) {
@@ -160,8 +161,11 @@ export class GatewayHandler {
         const existingMembership = room.membership.find((ev) => ev.stateKey === event.state_key);
         if (existingMembership) {
             if (existingMembership.membership === event.content.membership) {
-                // No-op
-                return;
+                if (existingMembership.displayname !== event.content.displayname) {
+                    rename = true;
+                } else {
+                    return;
+                }
             }
             existingMembership.membership = event.content.membership;
             existingMembership.displayname = event.content.displayname;
@@ -178,7 +182,7 @@ export class GatewayHandler {
             });
         }
         log.info(`Updating membership for ${event.state_key} in ${chatName} ${room.roomId}`);
-        this.purple.gateway.sendMatrixMembership(chatName, event, room);
+        this.purple.gateway.sendMatrixMembership(chatName, event, room, rename);
     }
 
     public async initialMembershipSync(roomEntry: RoomBridgeStoreEntry) {
