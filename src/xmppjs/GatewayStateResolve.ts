@@ -37,6 +37,7 @@ export class GatewayStateResolve {
         }
         const existingMember = members.getMatrixMemberByMatrixId(chatName, event.state_key);
         const xmppMember = members.getXmppMemberByMatrixId(chatName, event.state_key);
+        log.info(`Handling state resolve for ${membership}`);
         if (membership === "join") {
             log.info(`Joining a Matrix user ${event.state_key}`);
             if (existingMember) {
