@@ -709,11 +709,11 @@ Say \`help\` for more commands.
         if (!event.state_key || !membership) {
             return;
         }
-        log.info(`Handling group ${event.state_key} ${membership}`);
         let acct: IBifrostAccount;
         const isGateway: boolean = context.remote.get("gateway");
         const name: string = context.remote.get("room_name");
         const roomProtocol: string = context.remote.get("protocol_id");
+        log.info(`Handling group ${event.state_key} ${membership} -> isGateway=${isGateway} name=${name} roomProtocol=${roomProtocol}`);
         if (isGateway) {
             await this.gatewayHandler.sendMatrixMembership(
                 name, context, event,
