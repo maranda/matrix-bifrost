@@ -663,7 +663,15 @@ Say \`help\` for more commands.
                 const props = Util.desanitizeProperties(
                     Object.assign({}, context.remote.get("properties")),
                 );
-                await ProtoHacks.addJoinProps(acct.protocol.id, props, event.sender, this.bridge.getIntent());
+                const intent = this.bridge.getIntent();
+                await ProtoHacks.addJoinProps(acct.protocol.id, props, event.sender, intent);
+                const state = await intent.roomState(event.room_id) as WeakEvent[];
+                const membership = state.find((ev) =>
+                    ev.type === "m.room.member" && ev.state_key === event.sender && ev.content.membership === "join"
+                );
+                if (membership?.content.displayname) {
+                    props.handle = membership.content.displayname as string;
+                }
                 await this.joinOrDefer(acct, name, props);
             }
             const roomName: string = context.remote.get("room_name");
@@ -737,6 +745,9 @@ Say \`help\` for more commands.
         log.info(`Sending ${membership} to`, props);
         if (membership === "join") {
             await ProtoHacks.addJoinProps(acct.protocol.id, props, event.state_key, this.bridge.getIntent());
+            if (event.content.displayname) {
+                props.handle = event.content.displayname;
+            }
             this.joinOrDefer(acct, name, props);
         } else if (membership === "leave") {
             await acct.rejectChat(props);
