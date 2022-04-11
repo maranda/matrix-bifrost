@@ -20,6 +20,7 @@ function sendToAllDevices(presence: StzaPresenceItem, devices: Set<string>) {
             undefined,
             presence.presenceType,
             presence.avatarHash,
+            presence.newNick,
         )
     )
 
@@ -55,6 +56,7 @@ export class GatewayStateResolve {
                     );
                     rlPresence.statusCodes.add(XMPPStatusCode.SelfChangingNick);
                     stanzas = sendToAllDevices(rlPresence, allDevices);
+                    return stanzas;
                 } else {
                     // Do not handle if we already have them
                     return [];

@@ -163,6 +163,7 @@ export class GatewayHandler {
             if (existingMembership.membership === event.content.membership) {
                 if (existingMembership.displayname !== event.content.displayname) {
                     rename = true;
+                    this.purple.gateway.sendMatrixMembership(chatName, event, room, rename);
                 } else {
                     return;
                 }
@@ -182,7 +183,7 @@ export class GatewayHandler {
             });
         }
         log.info(`Updating membership for ${event.state_key} in ${chatName} ${room.roomId}`);
-        this.purple.gateway.sendMatrixMembership(chatName, event, room, rename);
+        this.purple.gateway.sendMatrixMembership(chatName, event, room);
     }
 
     public async initialMembershipSync(roomEntry: RoomBridgeStoreEntry) {
