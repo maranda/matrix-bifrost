@@ -247,18 +247,32 @@ export class XmppJsAccount implements IBifrostAccount {
         const from = `${this.remoteId}/${this.resource}`;
         log.debug(`joinChat:`, this.remoteId, components);
         if (this.isInRoom(roomName)) {
-            log.debug(`Didn't join ${to} from ${from}, already joined`);
-            this.cleanDG(to, roomName);
-            return {
-                eventName: "already-joined",
-                account: {
-                    username: this.remoteId,
-                    protocol_id: XMPP_PROTOCOL.id,
-                } as IAccountMinimal,
-                conv: {
-                    name: roomName,
-                },
-            };
+            const currentHandle = this.roomHandles.get(roomName);
+            if (currentHandle !== components.handle) {
+                log.debug(`Leaving ${to} with old puppet ${currentHandle}`);
+                this.cleanedDG = 0;
+                this.cleanDG(to, roomName);
+                await this.rejectChat(
+                    {
+                        fullRoomName: components.fullRoomName,
+                        room: components.room,
+                        server: components.server,
+                    } as IChatJoinProperties
+                );
+            } else {
+                log.debug(`Didn't join ${to} from ${from}, already joined`);
+                this.cleanDG(to, roomName);
+                return {
+                    eventName: "already-joined",
+                    account: {
+                        username: this.remoteId,
+                        protocol_id: XMPP_PROTOCOL.id,
+                    } as IAccountMinimal,
+                    conv: {
+                        name: roomName,
+                    },
+                };
+            }
         }
         if (await this.selfPing(to)) {
             log.info(`Didn't join ${to} from ${from}, self ping says we are joined`);
@@ -334,7 +348,7 @@ export class XmppJsAccount implements IBifrostAccount {
 
     public async rejectChat(components: IChatJoinProperties) {
         /** This also handles leaving */
-        const room = `${components.room}@${components.server}`;
+        const room = components.fullRoomName || `${components.room}@${components.server}`;
         components.handle = this.roomHandles.get(room)!;
         log.info(`${this.remoteId} (${components.handle}) is leaving ${room}`);
 
