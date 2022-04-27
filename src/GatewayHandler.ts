@@ -262,10 +262,7 @@ export class GatewayHandler {
                 });
             }
             log.warn("Failed to join room:", ex.message);
-            if (ex.message === "Locally timed out waiting for a response" || ex.message === "ESOCKETTIMEDOUT") {
-                // attempt cleaning stale promises from the cache caused by timeouts on bridge startup sequences
-                this.roomIdCache.delete(roomId);
-            }
+            this.roomIdCache.delete(roomId);
             await this.purple.gateway.onRemoteJoin(ex.message, data.join_id, undefined, undefined);
         }
     }
