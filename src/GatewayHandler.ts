@@ -75,6 +75,10 @@ export class GatewayHandler {
             log.debug(`Getting state for ${roomId}`);
             const state = await intent.roomState(roomId);
             log.debug(`Got state for ${roomId}`);
+            const encryptedEv = state.find((e) => e.type === "m.room.encrypted");
+            if (encryptedEv) {
+                throw Error("Bridging of encrypted rooms is not supported");
+            }
             const nameEv = state.find((e) => e.type === "m.room.name");
             const topicEv = state.find((e) => e.type === "m.room.topic");
             const historyVis = state.find((e) => e.type === "m.room.history_visibility");
