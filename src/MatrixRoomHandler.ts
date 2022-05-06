@@ -187,6 +187,7 @@ export class MatrixRoomHandler {
             return result.matrix.getId();
         } catch (ex) {
             log.error("Failed to create room", ex);
+            this.roomCreationLock.delete(remoteId);
             throw ex;
         } finally {
             this.roomCreationLock.delete(remoteId);
@@ -287,6 +288,7 @@ export class MatrixRoomHandler {
             return result.matrix.getId();
         } catch (ex) {
             log.error("Failed to create room", ex);
+            this.roomCreationLock.delete(remoteId);
             throw ex;
         } finally {
             this.roomCreationLock.delete(remoteId);
