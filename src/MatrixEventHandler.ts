@@ -467,6 +467,9 @@ export class MatrixEventHandler {
                     if (roomExists) {
                         throw new Error("Room already exists in the database");
                     }
+                    if (event.content.displayname) {
+                        paramSet.handle = event.content.displayname as string;
+                    }
                     await ProtoHacks.addJoinProps(protocol.id, paramSet, event.sender, intent);
                     // We want to join the room to make sure it works.
                     let res: IConversationEvent;
