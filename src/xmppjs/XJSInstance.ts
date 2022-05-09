@@ -326,6 +326,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         }
         await xmpp.start();
         this.xmpp = xmpp;
+        this.emit("initialize-instance", true);
     }
 
     public signInAccounts(mxidUsernames: {[mxid: string]: string}) {

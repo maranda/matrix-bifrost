@@ -293,6 +293,17 @@ export class PgDataStore implements IStore {
         });
     }
 
+    public async listLocalSenderNames(): Promise<Set<string>> {
+        const res = await this.pgPool.query(
+            "SELECT * FROM remote_users WHERE user_id in (SELECT user_id FROM accounts)"
+        );
+        const senders = new Set<string>();
+        res.rows.forEach((row) => {
+            senders.add(row.sender_name);
+        });
+        return senders;
+    }
+
     public async storeAccount(userId: string, protocol: BifrostProtocol, username: string, extraData?: any) {
         log.debug("Storing account ", userId);
         const acctProps = {

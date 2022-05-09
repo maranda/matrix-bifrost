@@ -1,6 +1,6 @@
-import { Bridge, MatrixUser, Intent, Logging, WeakEvent, RoomBridgeStoreEntry} from "matrix-appservice-bridge";
+import { Bridge, MatrixUser, Intent, Logging, WeakEvent, RoomBridgeStoreEntry } from "matrix-appservice-bridge";
 import { IBifrostInstance } from "./bifrost/Instance";
-import { MROOM_TYPE_GROUP, MROOM_TYPE_IM, IRemoteGroupData, MUSER_TYPE_GHOST } from "./store/Types";
+import { MROOM_TYPE_GROUP, MROOM_TYPE_IM, IRemoteGroupData } from "./store/Types";
 import {
     IReceivedImMsg,
     IChatInvite,
@@ -23,7 +23,6 @@ import { Config } from "./Config";
 import { decode as entityDecode } from "html-entities";
 import { MessageFormatter } from "./MessageFormatter";
 import request from "axios";
-import { BifrostProtocol } from "./bifrost/Protocol";
 const log = Logging.get("MatrixRoomHandler");
 
 const ACCOUNT_LOCK_MS = 1000;
@@ -35,6 +34,7 @@ const EVENT_MAPPING_SIZE = 16384;
 export class MatrixRoomHandler {
     private bridge?: Bridge;
     private accountRoomLock: Set<string>;
+    private alreadyKnownSenders: Set<string>;
     private remoteEventIdMapping: Map<string, string>; // remote_id -> event_id
     private roomCreationLock: Map<string, Promise<RoomBridgeStoreEntry>>;
     private remoteEntriesCache: Map<IRemoteGroupData, any>;
@@ -46,6 +46,7 @@ export class MatrixRoomHandler {
         private deduplicator: Deduplicator,
     ) {
         this.accountRoomLock = new Set();
+        this.alreadyKnownSenders = new Set();
         this.roomCreationLock = new Map();
         this.remoteEntriesCache = new Map();
         if (this.purple.needsDedupe() || this.purple.needsAccountLock()) {
@@ -95,10 +96,18 @@ export class MatrixRoomHandler {
                 storeUser.remoteId,
                 storeUser.data,
             );
+            if (!this.alreadyKnownSenders.has(storeUser.remoteId)) {
+                this.alreadyKnownSenders.add(storeUser.remoteId);
+            }
         });
         purple.on("clean-remote-doppleganger", this.handleDPCleaning.bind(this));
         this.remoteEventIdMapping = new Map();
         purple.on("read-receipt", this.handleReadReceipt.bind(this));
+        purple.on("remove-room-lock", (data: { roomId: string }) => {
+            log.info(`Called for creation lock deletion on ${data.roomId}, probably room was plumbed...`);
+            this.roomCreationLock.delete(data.roomId);
+        });
+        purple.on("initialize-instance", this.handleStartup.bind(this));
     }
 
     /**
@@ -513,6 +522,9 @@ export class MatrixRoomHandler {
             (!remoteUser || remoteUser!.displayname);
         try {
             if (data.state === "joined") {
+                if (this.alreadyKnownSenders.has(data.sender)) {
+                    return;
+                }
                 if (!profileNeeded) {
                     await intent.join(roomId);
                 }
@@ -528,6 +540,7 @@ export class MatrixRoomHandler {
                 }
             } else if (data.state === "kick") {
                 await intent.kick(roomId, senderMatrixUser.getId(), data.reason || undefined);
+                this.alreadyKnownSenders.delete(data.sender);
             } else if (data.state === "left") {
                 if (this.config.tuning.limitStateChanges &&
                     (!data.gatewayAlias && !data.banner && (!data.kicker || (data.kicker && data.technical)))
@@ -536,6 +549,7 @@ export class MatrixRoomHandler {
                     return;
                 }
                 await intent.leave(roomId, data.reason || undefined);
+                this.alreadyKnownSenders.delete(data.sender);
             }
         } catch (ex) {
             log.warn("Failed to apply state change:", ex);
@@ -698,6 +712,16 @@ export class MatrixRoomHandler {
             log.debug(`Removing detected doppleganger ${data.sender} -> ${senderMatrixUser.getId()}`);
         } catch (ex) {
             log.warn(`Failed cleaning doppleganger: ${ex}`);
+        }
+    }
+
+    private async handleStartup(data: any) {
+        log.info("Initializing list of already known senders for startup sequence");
+        try {
+            this.alreadyKnownSenders = await this.store.listLocalSenderNames();
+        } catch (ex) {
+            log.warn("Initialization failed:", ex);
+            this.alreadyKnownSenders = new Set();
         }
     }
 }

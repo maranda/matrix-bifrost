@@ -490,6 +490,7 @@ export class MatrixEventHandler {
                         `${acct.protocol.id}:${res.conv.name}`,
                     ).toString("base64");
                     await this.store.storeRoom(event.room_id, MROOM_TYPE_GROUP, remoteId, remoteData);
+                    this.purple.emit("remove-room-lock", { roomId: remoteId });
                     // Fetch Matrix members and join them.
                     try {
                         const userIds = Object.keys(await this.bridge.getBot().getJoinedMembers(event.room_id));
