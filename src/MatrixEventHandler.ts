@@ -465,7 +465,11 @@ export class MatrixEventHandler {
                 if (paramSet != null) {
                     let roomExists = await this.store.getRoomEntryByMatrixId(event.room_id);
                     if (roomExists) {
-                        throw new Error("Room already exists in the database");
+                        if (roomExists.matrix.get("type") !== MROOM_TYPE_GROUP) {
+                            throw new Error("Can only plumb group type rooms (at least 3 people including the Bot), not IM or Admin");
+                        } else {
+                            throw new Error("Room already exists in the database");
+                        }
                     }
                     if (event.content.displayname) {
                         paramSet.handle = event.content.displayname as string;
