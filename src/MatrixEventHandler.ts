@@ -444,7 +444,7 @@ export class MatrixEventHandler {
         const powerLevels = await intent.getStateEvent(event.room_id, "m.room.power_levels");
         const userPl = powerLevels.users[event.sender] === undefined ? powerLevels.users_default :
             powerLevels.users[event.sender];
-        if (userPl < requiredPl) {
+        if (userPl < requiredPl && event.sender !== this.config.bridge.adminMxID) {
             log.warn(`${event.sender}'s PL is too low to run a plumbing command ${userPl} < ${requiredPl}`);
             return;
         }

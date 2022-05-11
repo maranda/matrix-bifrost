@@ -9,6 +9,8 @@ bridge:
   # mediaserverUrl: "http://example.com:8008"
   # Set this to the port you want the bridge to listen on.
   appservicePort: 9555
+  # Specify a Bridge Administrator mxID
+  #adminMxID: "@user:homeserver.tld"
 
 roomRules: []
 # - room: "#badroom:example.com"

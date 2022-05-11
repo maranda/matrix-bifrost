@@ -16,6 +16,7 @@ export class Config {
         mediaserverUrl: undefined,
         userPrefix: "_bifrost_",
         appservicePort: 9555,
+        adminMxID: undefined,
     };
 
     public readonly roomRules: IConfigRoomRule[] = [];
@@ -108,6 +109,7 @@ export interface IConfigBridge {
     mediaserverUrl?: string;
     userPrefix: string;
     appservicePort?: number;
+    adminMxID?: string,
 }
 
 export interface IConfigPurple {
