@@ -351,6 +351,22 @@ export class MatrixRoomHandler {
             roomId = await this.createOrGetIMRoom(data, matrixUser, intent);
         }
 
+        if (data.message.redacted) {
+            // do nothing
+            log.info(`Received retraction by ${data.sender} for ${data.message.redacted.redact_id}`);
+            try {
+                const isKnown = await this.store.getMatrixEventId(roomId, data.message.redacted.redact_id);
+                if (isKnown) {
+                    await intent.getClient().redactEvent(roomId, data.message.redacted.redact_id);
+                } else {
+                    throw Error(`Failed to redact, we don't know about ${data.message.redacted.redact_id}`);
+                }
+            } catch (e) {
+                log.error(`Failed to redact message for this IM: ${e}`);
+            }
+            return;
+        }
+
         log.info(`Sending IM to ${roomId} as ${senderMatrixUser.getId()}`);
         if (data.message.original_message) {
             data.message.original_message = (
@@ -428,6 +444,21 @@ export class MatrixRoomHandler {
             roomId = await this.createOrGetGroupChatRoom(data, intent);
         } catch (e) {
             log.error(`Failed to get/create room for this chat:`, e);
+            return;
+        }
+        if (data.message.redacted) {
+            // do nothing
+            log.info(`Received retraction by ${data.sender}, handling for ${data.message.redacted.redact_id} -> ${data.conv.name}`);
+            try {
+                const isKnown = await this.store.getMatrixEventId(roomId, data.message.redacted.redact_id);
+                if (isKnown) {
+                    await intent.getClient().redactEvent(roomId, data.message.redacted.redact_id);
+                } else {
+                    throw Error(`Failed to redact, we don't know about ${data.message.redacted.redact_id}`);
+                }
+            } catch (e) {
+                log.error(`Failed to redact message for this Group: ${e}`);
+            }
             return;
         }
         if (data.message.original_message) {

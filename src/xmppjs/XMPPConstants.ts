@@ -18,8 +18,9 @@ export enum XMPPFeatures {
     IqVersion = "jabber:iq:version",
     IqSearch = "jabber:iq:search",
     MessageCorrection = "urn:xmpp:message-correct:0",
+    MessageRetraction = "urn:xmpp:message-retract:0",
     XHTMLIM = "http://jabber.org/protocol/xhtml-im",
     vCard = "vcard-temp",
 }
 
-export const BridgeVersion = "0.4.0.arianet.1"
+export const BridgeVersion = "0.4.0.arianet.2"

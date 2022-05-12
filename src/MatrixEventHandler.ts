@@ -264,6 +264,13 @@ export class MatrixEventHandler {
             this.handleStateEv(ctx, event);
         }
 
+        if (event.type === "m.room.redaction") {
+            if (this.bridge.getBot().isRemoteUser(event.sender)) {
+                return; // don't handle our own redactions
+            }
+            await this.handleRedaction(ctx, event);
+        }
+
         if (event.type !== "m.room.message") {
             // We are only handling bridged room messages now.
             return;
@@ -701,17 +708,17 @@ Say \`help\` for more commands.
         log.info(`Handling group message for ${event.room_id}`);
         const roomProtocol: string = context.remote.get("protocol_id");
         const isGateway: boolean = context.remote.get("gateway");
-        const name: string = context.remote.get("room_name");
+        const roomName: string = context.remote.get("room_name");
         if (isGateway) {
             const msg = MessageFormatter.matrixEventToBody(event as MatrixMessageEvent, this.config.bridge);
-            this.gatewayHandler.sendMatrixMessage(name, event.sender, msg, context);
+            this.gatewayHandler.sendMatrixMessage(roomName, event.sender, msg, context);
             return;
         }
         try {
             const {acct, newAcct} = await this.getAccountForMxid(event.sender, roomProtocol);
             log.info(`Got ${acct.name} for ${event.sender}`);
-            if (!acct.isInRoom(name)) {
-                log.debug(`${event.sender} talked in ${name}, joining them.`);
+            if (!acct.isInRoom(roomName)) {
+                log.debug(`${event.sender} talked in ${roomName}, joining them.`);
                 const props = Util.desanitizeProperties(
                     Object.assign({}, context.remote.get("properties")),
                 );
@@ -724,9 +731,8 @@ Say \`help\` for more commands.
                 if (membership?.content.displayname) {
                     props.handle = membership.content.displayname as string;
                 }
-                await this.joinOrDefer(acct, name, props);
+                await this.joinOrDefer(acct, roomName, props);
             }
-            const roomName: string = context.remote.get("room_name");
             const msg = MessageFormatter.matrixEventToBody(event as MatrixMessageEvent, this.config.bridge);
             let nick = "";
             // XXX: Gnarly way of trying to determine who we are.
@@ -752,9 +758,44 @@ Say \`help\` for more commands.
                     msg.body,
                 );
             }
-            acct.sendChat(context.remote.get("room_name"), msg);
+            acct.sendChat(roomName, msg);
         } catch (ex) {
             log.error("Couldn't send message to chat:", ex);
+        }
+    }
+
+    private async handleRedaction(context: RoomBridgeStoreEntry, event: WeakEvent) {
+        if (!context.remote || !context.matrix) {
+            throw Error('Cannot handle message, remote or matrix not defined');
+        }
+        if (!this.bridge) {
+            throw Error('bridge is not defined yet')
+        }
+        log.info(`Handling redaction for ${event.room_id}`);
+        const isGateway: boolean = context.remote.get("gateway");
+        const roomName: string = context.remote.get("room_name");
+        const msg = MessageFormatter.matrixEventToBody(event as MatrixMessageEvent, this.config.bridge);
+        if (isGateway) {
+            this.gatewayHandler.sendMatrixMessage(roomName, event.sender, msg, context);
+            return;
+        }
+        let acct: IBifrostAccount;
+        const roomProtocol: string = context.remote.get("protocol_id");
+        try {
+            acct = (await this.getAccountForMxid(event.sender, roomProtocol)).acct;
+        } catch (ex) {
+            log.error(`Couldn't handle ${event.event_id}, ${ex}`);
+            return;
+        }
+        const recipient: string = context.remote.get("recipient");
+        if (recipient) {
+            // it's an IM
+            acct.sendIM(recipient, msg);
+            return;
+        }
+        if (roomName) {
+            // it's a Group
+            acct.sendChat(roomName, msg);
         }
     }
 

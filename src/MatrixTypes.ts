@@ -49,4 +49,5 @@ export interface IMatrixMsgContents {
 
 export interface MatrixMessageEvent extends WeakEvent {
     content: IMatrixMsgContents;
+    [key: string]: any|undefined;
 }

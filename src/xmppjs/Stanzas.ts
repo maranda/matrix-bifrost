@@ -254,6 +254,8 @@ export class StzaMessage extends StzaBase {
     public markable: boolean = true;
     public attachments: string[] = [];
     public replacesId?: string;
+    public retractsId?: string;
+    public retractsReason?: string;
     constructor(
         from: string,
         to: string,
@@ -274,6 +276,9 @@ export class StzaMessage extends StzaBase {
             this.id = idOrMsg.id;
             if (idOrMsg.original_message) {
                 this.replacesId = idOrMsg.original_message;
+            }
+            if (idOrMsg.redacted?.redact_id) {
+                this.retractsId = idOrMsg.redacted.redact_id;
             }
         } else if (idOrMsg) {
             this.id = idOrMsg as string;
@@ -324,8 +329,10 @@ export class StzaMessage extends StzaBase {
         const markable = this.markable ? "<markable xmlns='urn:xmpp:chat-markers:0'/>" : "";
         // XEP-0308
         const replaces = this.replacesId ? `<replace id='${this.replacesId}' xmlns='urn:xmpp:message-correct:0'/>` : "";
+        // XEP-424
+        const retracts = this.retractsId ? `<apply-to id='${this.retractsId}' xmlns='urn:xmpp:fasten:0'><retract xmlns='urn:xmpp:message-retract:0'/></apply-to>` : "";
         return `<message from="${this.from}" to="${this.to}" id="${this.id}" ${type}>`
-             + `${this.html}<body>${encode(this.body)}</body>${attachments}${markable}${replaces}</message>`;
+            + `${this.html}<body>${encode(this.body)}</body>${attachments}${markable}${replaces}${retracts}</message>`;
     }
 }
 

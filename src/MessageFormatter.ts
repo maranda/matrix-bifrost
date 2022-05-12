@@ -1,7 +1,7 @@
 import { BifrostProtocol } from "./bifrost/Protocol";
 import { PRPL_S4B, PRPL_XMPP } from "./ProtoHacks";
 import { Parser } from "htmlparser2";
-import { Intent, Logging } from "matrix-appservice-bridge";
+import { Intent, Logging, WeakEvent } from "matrix-appservice-bridge";
 import { IConfigBridge } from "./Config";
 import request from "axios";
 import { IMatrixMsgContents, MatrixMessageEvent } from "./MatrixTypes";
@@ -12,6 +12,7 @@ export interface IBasicProtocolMessage {
     formatted?: {type: string, body: string}[];
     id?: string;
     original_message?: string;
+    redacted?: {redact_id: string};
     opts?: {
         attachments?: IMessageAttachment[];
     };
@@ -26,9 +27,18 @@ export interface IMessageAttachment {
 export class MessageFormatter {
 
     public static matrixEventToBody(event: MatrixMessageEvent, config: IConfigBridge): IBasicProtocolMessage {
+        const redacted = event.type === "m.room.redaction";
+        const formatted: { type: string, body: string }[] = [];
+        if (redacted) {
+            return {
+                body: "A retract was attempted, but it's unsupported by your client",
+                formatted,
+                id: event.event_id,
+                redacted: {redact_id: event.redacts}
+            }
+        }
         let content = event.content;
-        const originalMessage = event.content["m.relates_to"]?.event_id;
-        const formatted: {type: string, body: string}[] = [];
+        const originalMessage = event.content["m.relates_to"] ?.event_id;
         if (event.content["m.relates_to"]?.rel_type === "m.replace" && event.content["m.new_content"]) {
             // This is an edit!
             content = event.content["m.new_content"];

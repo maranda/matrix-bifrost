@@ -883,6 +883,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         convName: string, forceMucPM: boolean) {
         const body = stanza.getChildText("body");
         const replace = stanza.getChildByAttr("xmlns", "urn:xmpp:message-correct:0");
+        const retract = stanza.getChildByAttr("xmlns", "urn:xmpp:fasten:0");
         const type = stanza.attrs.type;
         const attachments: IMessageAttachment[] = [];
         // https://xmpp.org/extensions/xep-0066.html#x-oob
@@ -901,6 +902,8 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             formatted: [ ],
             id: stanza.attrs.id,
             original_message: replace ? replace.getAttr("id") : undefined,
+            redacted: retract && retract.getChildByAttr("xmlns", "urn:xmpp:message-retract:0") ?
+                { redact_id: retract.getAttr("id") } : undefined,
             opts: {
                 attachments,
             },
