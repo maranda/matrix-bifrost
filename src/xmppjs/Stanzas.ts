@@ -331,8 +331,10 @@ export class StzaMessage extends StzaBase {
         const replaces = this.replacesId ? `<replace id='${this.replacesId}' xmlns='urn:xmpp:message-correct:0'/>` : "";
         // XEP-424
         const retracts = this.retractsId ? `<apply-to id='${this.retractsId}' xmlns='urn:xmpp:fasten:0'><retract xmlns='urn:xmpp:message-retract:0'/></apply-to>` : "";
+        // XEP-0359
+        const originId = this.id && !this.replacesId && !this.retractsId ? `<origin-id id='${this.id}' xmlns='urn:xmpp:sid:0'/>` : "";
         return `<message from="${this.from}" to="${this.to}" id="${this.id}" ${type}>`
-            + `${this.html}<body>${encode(this.body)}</body>${attachments}${markable}${replaces}${retracts}</message>`;
+            + `${this.html}<body>${encode(this.body)}</body>${attachments}${markable}${replaces}${retracts}${originId}</message>`;
     }
 }
 
