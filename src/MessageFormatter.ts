@@ -40,7 +40,12 @@ export class MessageFormatter {
             });
         }
         if (content.msgtype === "m.emote") {
-            return {body: `/me ${content.body}`, formatted, id: event.event_id};
+            return {
+                body: `/me ${content.body}`,
+                formatted,
+                id: event.event_id,
+                original_message: originalMessage ? originalMessage : undefined,
+            };
         }
         if (["m.file", "m.image", "m.video"].includes(event.content.msgtype) && event.content.url) {
             const uriBits = event.content.url.substr("mxc://".length).split("/");
