@@ -781,13 +781,18 @@ Say \`help\` for more commands.
         }
         let acct: IBifrostAccount;
         const roomProtocol: string = context.remote.get("protocol_id");
+        const recipient: string = context.remote.get("recipient");
         try {
-            acct = (await this.getAccountForMxid(event.sender, roomProtocol)).acct;
+            let originalSender: string;
+            if (!recipient) {
+                const originalEvent = await this.bridge.getIntent().getEvent(event.room_id, event.redacts as string);
+                originalSender = originalEvent?.sender;
+            }
+            acct = (await this.getAccountForMxid(originalSender || event.sender, roomProtocol)).acct;
         } catch (ex) {
             log.error(`Couldn't handle ${event.event_id}, ${ex}`);
             return;
         }
-        const recipient: string = context.remote.get("recipient");
         if (recipient) {
             // it's an IM
             acct.sendIM(recipient, msg);
