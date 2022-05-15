@@ -193,13 +193,12 @@ export class MatrixRoomHandler {
                 await this.deduplicator.waitForJoin(result.matrix.getId(), matrixUser.getId());
                 log.info("User joined, can now send messages");
             }
+            this.roomCreationLock.delete(remoteId);
             return result.matrix.getId();
         } catch (ex) {
             log.error("Failed to create room", ex);
             this.roomCreationLock.delete(remoteId);
             throw ex;
-        } finally {
-            this.roomCreationLock.delete(remoteId);
         }
     }
 
@@ -294,13 +293,12 @@ export class MatrixRoomHandler {
         try {
             this.roomCreationLock.set(remoteId, createPromise);
             const result = await createPromise;
+            this.roomCreationLock.delete(remoteId);
             return result.matrix.getId();
         } catch (ex) {
             log.error("Failed to create room", ex);
             this.roomCreationLock.delete(remoteId);
             throw ex;
-        } finally {
-            this.roomCreationLock.delete(remoteId);
         }
     }
 
