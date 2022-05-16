@@ -6,6 +6,7 @@ import { IBifrostAccount } from "./Account";
 import { IBasicProtocolMessage } from "../MessageFormatter";
 import { IPublicRoomsResponse } from "../MatrixTypes";
 import { BifrostProtocol } from "./Protocol";
+import { WeakEvent } from "matrix-appservice-bridge";
 
 export interface IChatJoinProperties {[key: string]: string; }
 
@@ -34,6 +35,11 @@ export interface IConversationEvent extends IAccountEvent {
 export interface IReceivedImMsg extends IConversationEvent {
     sender: string;
     message: IBasicProtocolMessage;
+}
+
+export interface IFetchReceivedGroupMsg {
+    room_id: string;
+    event: WeakEvent;
 }
 
 export interface IChatInvite extends IAccountEvent {

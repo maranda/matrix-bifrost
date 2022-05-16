@@ -149,6 +149,10 @@ export class XmppJsGateway implements IGateway {
         log.debug("Added cached stanza for " + id);
     }
 
+    public getMembersInRoom(chatName: string) {
+        return this.members.getMembers(chatName);
+    }
+
     public memberInRoom(chatName: string, matrixId: string) {
         return !!this.members.getXmppMemberByMatrixId(chatName, matrixId);
     }

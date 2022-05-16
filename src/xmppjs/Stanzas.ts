@@ -4,6 +4,8 @@ import * as he from "html-entities";
 import { IBasicProtocolMessage } from "../MessageFormatter";
 import { XMPPFeatures, XMPPStatusCode } from "./XMPPConstants";
 import { Util } from "../Util";
+import { IBifrostMAMEntry } from "./MAM";
+import { XHTMLIM } from "./XHTMLIM";
 
 const REGEXP_AS_PREFIX = /@(_[a-zA-Z0-9]+_).*/;
 const REGEXP_HTML_TRAIL = /(<a href=['"]#['"]>)(@[a-zA-Z0-9_.=-]+:[a-zA-Z0-9.-]+)(<\/a>)/;
@@ -291,7 +293,7 @@ export class StzaMessage extends StzaBase {
     }
 
     get xml(): string {
-        const type = this.messageType ? `type='${this.messageType}'` : "";
+        const type = this.messageType ? ` type='${this.messageType}'` : "";
         const attachments = this.attachments.map((a) =>
             `<x xmlns='jabber:x:oob'><url>${encode(a)}</url></x>`,
         );
@@ -300,7 +302,7 @@ export class StzaMessage extends StzaBase {
             this.body = this.attachments[0];
         }
         // Remove mxID trailer in replies if it's too long
-        const trailMatch = this.body.match(REGEXP_TEXT_TRAIL);
+        const trailMatch = this.body?.match(REGEXP_TEXT_TRAIL);
         if (trailMatch) {
             const hasPrefix = trailMatch[1].match(REGEXP_AS_PREFIX);
             const prefix = hasPrefix ? hasPrefix[1] : null;
@@ -313,7 +315,7 @@ export class StzaMessage extends StzaBase {
         }
         // Also fix the trailer into XHTML-IM if present
         if (this.html !== "") {
-            const htrailMatch = this.html.match(REGEXP_HTML_TRAIL);
+            const htrailMatch = this.html?.match(REGEXP_HTML_TRAIL);
             if (htrailMatch) {
                 const hasPrefix = htrailMatch[2].match(REGEXP_AS_PREFIX);
                 const prefix = hasPrefix ? hasPrefix[1] : null;
@@ -333,8 +335,10 @@ export class StzaMessage extends StzaBase {
         const retracts = this.retractsId ? `<apply-to id='${this.retractsId}' xmlns='urn:xmpp:fasten:0'><retract xmlns='urn:xmpp:message-retract:0'/></apply-to>` : "";
         // XEP-0359
         const originId = this.id && !this.replacesId && !this.retractsId ? `<origin-id id='${this.id}' xmlns='urn:xmpp:sid:0'/>` : "";
-        return `<message from="${this.from}" to="${this.to}" id="${this.id}" ${type}>`
-            + `${this.html}<body>${encode(this.body)}</body>${attachments}${markable}${replaces}${retracts}${originId}</message>`;
+        const bodyEl = this.body ? `<body>${encode(this.body)}</body>` : "";
+        const toAttr = this.to ? `to='${this.to}' ` : "";
+        return `<message from='${this.from}' ${toAttr}id='${this.id}'${type}>`
+            + `${this.html}${bodyEl}${attachments}${markable}${replaces}${retracts}${originId}</message>`;
     }
 }
 
@@ -357,6 +361,41 @@ export class StzaMessageSubject extends StzaBase {
     get xml(): string {
         return `<message from="${this.from}" to="${this.to}" id="${this.id}" type='groupchat'>`
              + `<subject>${encode(this.subject)}</subject></message>`;
+    }
+}
+
+export class StzaMessageMAM extends StzaBase {
+    private delay: string;
+    private entryXML: string;
+    private entryId: string;
+    private queryId: string;
+    constructor(
+        from: string,
+        to: string,
+        queryId: string,
+        entry: IBifrostMAMEntry,
+    ) {
+        super(from, to);
+        this.delay = new Date(entry.timestamp).toISOString();
+        if (entry.payload.formatted?.length) {
+            entry.payload.formatted.forEach(
+                (f) => { if (f.type === "html") { f.body = XHTMLIM.HTMLToXHTML(f.body); } },
+            );
+        }
+        this.entryXML = new StzaMessage(entry.from, undefined, entry.payload, "groupchat").xml;
+        this.entryId = entry.payload.id;
+        this.queryId = queryId ? ` queryid='${queryId}'` : "";
+    }
+
+    get type(): string {
+        return "message";
+    }
+
+    get xml(): string {
+        return `<message from='${this.from}' to='${this.to}' id='${uuid()}'>`
+            + `<result xmlns='urn:xmpp:mam:2'${this.queryId} id='${this.entryId}'><forwarded xmlns='urn:xmpp:forward:0'>`
+            + `<delay xmlns='urn:xmpp:delay' stamp='${this.delay}'/>${this.entryXML}`
+            + `</forwarded></result></message>`;
     }
 }
 
@@ -395,7 +434,7 @@ export class StzaIqPingError extends StzaIqPing {
     }
 }
 
-export abstract class StzaIqDisco extends StzaBase {
+export abstract class StzaIqQuery extends StzaBase {
     constructor(
         from: string,
         to: string,
@@ -418,7 +457,7 @@ export abstract class StzaIqDisco extends StzaBase {
     }
 }
 
-export class StzaIqDiscoItems extends StzaIqDisco {
+export class StzaIqDiscoItems extends StzaIqQuery {
     private items: {jid: string, name: string}[];
     constructor(
         from: string,
@@ -454,7 +493,7 @@ export class StzaIqDiscoItems extends StzaIqDisco {
     }
 }
 
-export class StzaIqDiscoInfo extends StzaIqDisco {
+export class StzaIqDiscoInfo extends StzaIqQuery {
     public identity: Set<{ category: string, type: string, name: string }>;
     public feature: Set<XMPPFeatures>;
     public roominfo: Set<{ label: string, var: string, type: string, value: string }>;
@@ -493,6 +532,69 @@ export class StzaIqDiscoInfo extends StzaIqDisco {
 
 }
 
+export class StzaIqMAMFields extends StzaIqQuery {
+    private readonly mamFields: Map<string, string>;
+    constructor(
+        from: string,
+        to: string,
+        id: string,
+        fields: Map<string, string>,
+    ) {
+        super(from, to, id, "result", "urn:xmpp:mam:2");
+        this.mamFields = fields;
+    }
+
+    get queryContent(): string {
+        let content = "<x type='form' xmlns='jabber:x:data' >"
+            + "<field var='FORM_TYPE' type='hidden'><value>urn:xmpp:mam:2</value></field>";
+        this.mamFields.forEach((fieldType, fieldName) => {
+            content = content + `<field var='${fieldName}' type='${fieldType}'/>`;
+        });
+        return content;
+    }
+}
+
+export class StzaIqMAMFin extends StzaBase {
+    private first: string;
+    private last: string;
+    private count: number;
+    private index: number;
+    private complete: boolean;
+    constructor(
+        from: string,
+        to: string,
+        id: string,
+        first: string,
+        last: string,
+        count: number,
+        index: number,
+        complete?: boolean,
+    ) {
+        super(from, to, id);
+        this.first = first;
+        this.last = last;
+        this.count = count;
+        this.index = index;
+        this.complete = complete;
+    }
+
+    get type(): string {
+        return "iq";
+    }
+
+    get xml(): string {
+        let firstEl = this.first ? `<first index='${this.index}'>${this.first}</first>` : "";
+        let lastEl = this.last ? `<last>${this.last}</last>` : ""
+        return `<iq from='${this.from}' to='${this.to}' id='${this.id}' type='result'>`
+            + `<fin xmlns='urn:xmpp:mam:2'${this.complete ? " complete='true'" : ""}>`
+            + `<set xmlns='http://jabber.org/protocol/rsm'>`
+            + firstEl + lastEl
+            + `<count>${this.count}</count >`
+            + `</set>`
+            + `</fin></iq>`;
+    }
+}
+
 export class StzaIqSearchFields extends StzaBase {
     constructor(
         from: string,
@@ -519,7 +621,7 @@ export class StzaIqSearchFields extends StzaBase {
     }
 }
 
-export class SztaIqError extends StzaBase {
+export class StzaIqError extends StzaBase {
     constructor(
         from: string,
         to: string,

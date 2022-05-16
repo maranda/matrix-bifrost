@@ -24,10 +24,11 @@ import { IBasicProtocolMessage, IMessageAttachment } from "../MessageFormatter";
 import { PresenceCache } from "./PresenceCache";
 import { Metrics } from "../Metrics";
 import { ServiceHandler } from "./ServiceHandler";
+import { MAMHandler } from "./MAM";
 import { XJSConnection } from "./XJSConnection";
 import { AutoRegistration } from "../AutoRegistration";
 import { XmppJsGateway } from "./XJSGateway";
-import { IStza, StzaBase, StzaIqDisco, StzaIqDiscoInfo, StzaIqPing, StzaIqPingError, StzaIqVcardRequest, StzaMessage } from "./Stanzas";
+import { IStza, StzaBase, StzaIqDiscoInfo, StzaIqPing, StzaIqPingError, StzaIqVcardRequest, StzaMessage } from "./Stanzas";
 import { Util } from "../Util";
 import { v4 as uuid } from "uuid";
 
@@ -68,6 +69,7 @@ const XMPP_URI_SUB_MATCH = /xmpp:((.+)@)?([a-zA-Z0-9.-]+)(\?join)?/;
 export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     public readonly presenceCache: PresenceCache;
     public serviceHandler: ServiceHandler;
+    public mamHandler?: MAMHandler;
     private xmpp?: any;
     private myAddress!: JID;
     private accounts: Map<string, XmppJsAccount>;
@@ -118,6 +120,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     public preStart(bridge: Bridge, autoRegister: AutoRegistration) {
         this.autoRegister = autoRegister;
         this.bridge = bridge;
+        this.mamHandler = new MAMHandler(this, this.bridge, this.config.bridge);
         if (!autoRegister) {
             throw Error('autoRegistration not defined, cannot start bridge');
         }

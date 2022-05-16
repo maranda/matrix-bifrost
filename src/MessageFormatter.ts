@@ -38,7 +38,7 @@ export class MessageFormatter {
             }
         }
         let content = event.content;
-        const originalMessage = event.content["m.relates_to"] ?.event_id;
+        const originalMessage = event.content["m.relates_to"]?.event_id;
         if (event.content["m.relates_to"]?.rel_type === "m.replace" && event.content["m.new_content"]) {
             // This is an edit!
             content = event.content["m.new_content"];

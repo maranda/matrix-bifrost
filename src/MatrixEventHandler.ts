@@ -12,7 +12,7 @@ import { Deduplicator } from "./Deduplicator";
 import { AutoRegistration } from "./AutoRegistration";
 import { Config } from "./Config";
 import { IStore } from "./store/Store";
-import { IAccountEvent, IChatJoinProperties, IChatJoined, IConversationEvent } from "./bifrost/Events";
+import { IAccountEvent, IChatJoinProperties, IChatJoined, IConversationEvent, IFetchReceivedGroupMsg } from "./bifrost/Events";
 import { ProtoHacks } from "./ProtoHacks";
 import { RoomAliasSet } from "./RoomAliasSet";
 import { MessageFormatter } from "./MessageFormatter";
@@ -710,6 +710,10 @@ Say \`help\` for more commands.
         const isGateway: boolean = context.remote.get("gateway");
         const roomName: string = context.remote.get("room_name");
         if (isGateway) {
+            this.purple.emit("mam-add-entry", {
+                room_id: event.room_id,
+                event: event,
+            } as IFetchReceivedGroupMsg);
             const msg = MessageFormatter.matrixEventToBody(event as MatrixMessageEvent, this.config.bridge);
             this.gatewayHandler.sendMatrixMessage(roomName, event.sender, msg, context);
             return;

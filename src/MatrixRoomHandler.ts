@@ -13,6 +13,7 @@ import {
     IStoreRemoteUser,
     IChatReadReceipt,
     ICleanDoppleganger,
+    IFetchReceivedGroupMsg,
 } from "./bifrost/Events";
 import { ProfileSync } from "./ProfileSync";
 import { Util } from "./Util";
@@ -465,10 +466,18 @@ export class MatrixRoomHandler {
             ) || undefined;
         }
         const content = await MessageFormatter.messageToMatrixEvent(data.message, protocol, intent);
-        const {event_id} = await intent.sendMessage(roomId, content) as {event_id: string};
+        const { event_id } = await intent.sendMessage(roomId, content).catch((ex) => {
+            log.error("Failed to send message:", ex);
+        }) as { event_id: string };
+        this.purple.emit("mam-add-entry", {
+            room_id: roomId,
+            event: await intent.getEvent(roomId, event_id, true).catch((ex) => {
+                log.error("Failed to fetch event to store into MAM:", ex);
+            }),
+        } as IFetchReceivedGroupMsg);
         if (data.message.id) {
-            await this.store.storeRoomEvent(roomId, event_id, data.message.id).catch((ev) => {
-                log.warn("Failed to store event mapping:", ev);
+            await this.store.storeRoomEvent(roomId, event_id, data.message.id).catch((ex) => {
+                log.warn("Failed to store event mapping:", ex);
             });
         }
     }

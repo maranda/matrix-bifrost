@@ -1,6 +1,6 @@
 import * as Chai from "chai";
 import { StzaPresenceItem, StzaPresenceError, StzaMessageSubject,
-    StzaMessage, StzaPresencePart, StzaPresenceKick, SztaIqError } from "../../src/xmppjs/Stanzas";
+    StzaMessage, StzaPresencePart, StzaPresenceKick, StzaIqError } from "../../src/xmppjs/Stanzas";
 import { assertXML } from "./util";
 const expect = Chai.expect;
 
@@ -93,9 +93,9 @@ describe("Stanzas", () => {
             );
         });
     });
-    describe("SztaIqError", () => {
+    describe("StzaIqError", () => {
         it("should create a an error", () => {
-            const xml = new SztaIqError("foo@bar", "baz@bar", "someid", "cancel", null, "not-acceptable", "foo").xml;
+            const xml = new StzaIqError("foo@bar", "baz@bar", "someid", "cancel", null, "not-acceptable", "foo").xml;
             assertXML(xml);
             expect(xml).to.equal(
                 "<iq from='foo@bar' to='baz@bar' id='someid' type='error' xml:lang='en'>" +
@@ -105,7 +105,7 @@ describe("Stanzas", () => {
         });
     });
     it("should create a an error with custom text", () => {
-        const xml = new SztaIqError("foo@bar", "baz@bar", "someid", "cancel", null, "not-acceptable", "foo", "Something isn't right").xml;
+        const xml = new StzaIqError("foo@bar", "baz@bar", "someid", "cancel", null, "not-acceptable", "foo", "Something isn't right").xml;
         assertXML(xml);
         expect(xml).to.equal(
             "<iq from='foo@bar' to='baz@bar' id='someid' type='error' xml:lang='en'>" +

@@ -5,11 +5,16 @@ import { Logging } from "matrix-appservice-bridge";
 import request from "axios";
 import { IGatewayRoom } from "../bifrost/Gateway";
 import { IGatewayRoomQuery, IGatewayPublicRoomsQuery } from "../bifrost/Events";
-import { StzaIqDiscoInfo, StzaIqPing, StzaIqDiscoItems, StzaIqSearchFields, SztaIqError, StzaIqPingError, encode } from "./Stanzas";
+import {
+    encode, IStza, StzaIqDiscoInfo, StzaIqPing, StzaIqDiscoItems,
+    StzaIqSearchFields, StzaIqError, StzaIqPingError, StzaIqMAMFields,
+    StzaIqMAMFin, StzaMessageMAM
+} from "./Stanzas";
 import { IPublicRoomsResponse } from "../MatrixTypes";
 import { IConfigBridge } from "../Config";
 import { BridgeVersion, XMPPFeatures } from "./XMPPConstants";
 import { Util } from "../Util";
+import { IBifrostMAMRequest, MAMHandler } from "./MAM";
 
 const log = Logging.get("ServiceHandler");
 
@@ -86,6 +91,11 @@ export class ServiceHandler {
 
             if (stanza.getChildByAttr("xmlns", "http://jabber.org/protocol/disco#info") && local) {
                 return this.handleRoomDiscovery(to, from, id);
+            }
+
+            if (stanza.getChildByAttr("xmlns", XMPPFeatures.MessageArchiveManagement)) {
+                const mamQuery = stanza.getChildByAttr("xmlns", XMPPFeatures.MessageArchiveManagement);
+                return this.handleMAMQuery(to, from, id, stanza.attrs.type, mamQuery as any);
             }
         }
 
@@ -179,7 +189,7 @@ export class ServiceHandler {
                 const form = searchElement.getChildByAttr("xmlns", "jabber:x:data");
                 if (!form) {
                     log.warn(`Failed to search rooms: form is missing/invalid`);
-                    await this.xmpp.xmppSend(new SztaIqError(from, to, id, "modify", 400, "bad-request", undefined,
+                    await this.xmpp.xmppSend(new StzaIqError(from, to, id, "modify", 400, "bad-request", undefined,
                         "Request form is invalid"));
                     return;
                 }
@@ -220,7 +230,7 @@ export class ServiceHandler {
             log.warn(`Failed to search rooms: ${ex}`);
             // XXX: There isn't a very good way to explain why it failed,
             // so we use service unavailable.
-            await this.xmpp.xmppSend(new SztaIqError(from, to, id, "cancel", 503, "service-unavailable", undefined,
+            await this.xmpp.xmppSend(new StzaIqError(from, to, id, "cancel", 503, "service-unavailable", undefined,
                 `Failure fetching public rooms from ${homeserver}`));
             return;
         }
@@ -270,6 +280,7 @@ export class ServiceHandler {
             discoInfo.feature.add(XMPPFeatures.Muc);
             discoInfo.feature.add(XMPPFeatures.MessageCorrection);
             discoInfo.feature.add(XMPPFeatures.MessageRetraction);
+            discoInfo.feature.add(XMPPFeatures.MessageArchiveManagement);
             discoInfo.feature.add(XMPPFeatures.XHTMLIM);
             discoInfo.feature.add(XMPPFeatures.vCard);
             discoInfo.identity.add({
@@ -296,7 +307,7 @@ export class ServiceHandler {
             });
             await this.xmpp.xmppSend(discoInfo);
         } catch (ex) {
-            await this.xmpp.xmppSend(new SztaIqError(toStr, from, id, "cancel", 404, "item-not-found", undefined, "Room could not be found"));
+            await this.xmpp.xmppSend(new StzaIqError(toStr, from, id, "cancel", 404, "item-not-found", undefined, "Room could not be found"));
         }
     }
 
@@ -443,5 +454,74 @@ export class ServiceHandler {
 
         // All other pings are invalid in this context and will be ignored.
         await this.xmpp.xmppSend(new StzaIqPingError(to, from, id, "service-unavailable"));
+    }
+
+    private async handleMAMQuery(to: string, from: string, id: string, type: string, query: Element) {
+        // https://xmpp.org/extensions/xep-0313.html
+        const alias = this.parseAliasFromJID(jid(to));
+        try {
+            if (!alias) {
+                throw Error("Not a valid alias");
+            }
+            let roomData = await this.queryRoom(alias) as any;
+            log.info(`Response for alias request ${to} (${alias}) -> ${roomData.roomId}`);
+
+            if (type === "get") {
+                // return supported fields
+                const response = new StzaIqMAMFields(to, from, id, this.xmpp.mamHandler.supportedFields());
+                await this.xmpp.xmppSend(response);
+            } else if (type === "set") {
+                const data = query.getChildByAttr("xmlns", "jabber:x:data");
+                const queryId = query.getAttr("queryid");
+                const qStart = data?.getChildByAttr("var", "start")?.getChildText("value");
+                const qEnd = data?.getChildByAttr("var", "end")?.getChildText("value");
+                const qWith = data?.getChildByAttr("var", "with")?.getChildText("value");
+                let request = {
+                    gatewayAlias: alias,
+                    gatewayJID: to,
+                    roomId: roomData.roomId,
+                } as IBifrostMAMRequest;
+                if (qStart) {
+                    request.start = new Date(qStart);
+                }
+                if (qEnd) {
+                    request.end = new Date(qEnd);
+                }
+                if (qWith) {
+                    request.with = qWith;
+                }
+                const set = query.getChildByAttr("xmlns", "http://jabber.org/protocol/rsm");
+                if (set) {
+                    let rsm: { before: true|string|undefined, after: true|string|undefined, max: number|undefined } = {
+                        before: set.getChildText("before") || (set.getChild("before") ? true : undefined),
+                        after: set.getChildText("after") || (set.getChild("after") ? true : undefined),
+                        max: set.getChildText("max") ? Number(set.getChildText("max")) : undefined,
+                    };
+                    request.rsm = rsm;
+                }
+                const mamQuery = await this.xmpp.mamHandler.getEntries(request);
+                if (mamQuery.not_found) {
+                    log.error("MAM query " + queryId || id + " didn't return any result (failed RSM)");
+                    await this.xmpp.xmppSend(new StzaIqError(to, from, id, "cancel", 404, "item-not-found"));
+                    return;
+                }
+                if (mamQuery.results.length !== 0) {
+                    let stanzas: IStza[] = [];
+                    for (const entry of mamQuery.results) {
+                        let mamClone = Object.assign({}, entry);
+                        let forwarded = new StzaMessageMAM(to, from, queryId, mamClone);
+                        stanzas.push(forwarded);
+                    }
+                    await this.xmpp.xmppSendBulk(stanzas);
+                }
+                let response = new StzaIqMAMFin(to, from, id,
+                    mamQuery.first_id, mamQuery.last_id, mamQuery.count, mamQuery.index, mamQuery.complete);
+                await this.xmpp.xmppSend(response);
+            }
+        } catch (ex) {
+            log.error("Encountered error while processing MAM request: ", ex);
+            await this.xmpp.xmppSend(new StzaIqError(to, from, id, "cancel", 500, "internal-server-error", undefined,
+                "Encountered an internal error while processing your request"));
+        }
     }
 }
