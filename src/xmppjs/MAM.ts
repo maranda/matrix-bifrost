@@ -7,11 +7,30 @@ import { IFetchReceivedGroupMsg } from "../bifrost/Events";
 
 const log = Logging.get("MAMHandler");
 
+// matrix-js-sdk lacks types
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { Filter } = require('matrix-js-sdk');
+
 // This is the library containing MAM (XEP-0313) class and functions
 
 const MAM_CACHE_MAX_LENGTH = 30000;
 const MAM_REQUEST_DEFAULT_SIZE = 50;
 const MAM_REQUEST_MAX_SIZE = 200;
+
+const MESSAGE_FILTER = {
+    room: {
+        include_leave: false,
+        state: {
+            limit: 0,
+        },
+        timeline: {
+            types: ["m.room.messages"],
+        },
+        account_data: {
+            limit: 0,
+        }
+    },
+};
 
 export interface IBifrostMAMEntry {
     timestamp: number;
@@ -81,16 +100,22 @@ export class MAMHandler {
 
         // check if we have an archive already to try fetching from and appending to
         let archiveCache = this.mamCache.get(request.roomId);
+        let previous: any;
         if (!archiveCache) {
             try {
+                // bootstrap archive
+                log.info(`Bootstrapping archive for ${request.roomId}, attempting to fetch the last 5000 entries`);
                 await this.convergeEvRoomCache(request.roomId, intent);
+                while (previous !== archiveCache.length && archiveCache.length >= 5000) {
+                    await this.convergeEvRoomCache(request.roomId, intent, this.archivePaginationTokens.get(request.roomId));
+                    previous = archiveCache.length;
+                }
             } catch (ex) {
                 log.error(`Error converging cache: ${ex}`);
             }
             archiveCache = this.mamCache.get(request.roomId);
         }
 
-        let previous: any;
         let archiveStart: number;
         let archiveEnd: number;
         if (request.start && (!request.end || request.start < request.end)) {
@@ -161,7 +186,7 @@ export class MAMHandler {
                     not_found = true;
                 }
             } else if (typeof request.rsm.after === "string") {
-                start_idx = archiveCache.findIndex((ev) => ev.event_id === request.rsm.before) + 1;
+                start_idx = archiveCache.findIndex((ev) => ev.event_id === request.rsm.after) + 1;
                 if (start_idx !== -1) {
                     end_idx = start_idx + max;
                 } else if (start_idx === -1) {
@@ -246,10 +271,11 @@ export class MAMHandler {
     private async fetchMessagesFromMatrix(
         intent: Intent, roomId: string, token?: string, max?: number): Promise<{ end: string, events: WeakEvent[] }> {
         const client = intent.getClient();
+        const filter = new Filter(MESSAGE_FILTER);
         client._clientOpts = {
             lazyLoadMembers: false,
         };
-        const res = await client._createMessagesRequest(roomId, token, max, "b");
+        const res = await client._createMessagesRequest(roomId, token, max, "b", filter);
         const events: WeakEvent[] = [];
         for (const msg of res.chunk.reverse()) {
             if (msg.type === "m.room.message") {
