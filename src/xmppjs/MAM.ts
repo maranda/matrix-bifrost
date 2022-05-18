@@ -204,7 +204,12 @@ export class MAMHandler {
                 fst_lst = await this.sliceAndRenderArchiveCache(request, results, archiveCache, start_idx, end_idx, max);
             }
             index = archiveCache.findIndex((ev) => ev.event_id === fst_lst.fst);
-            complete = archiveCache[archiveCache.length - 1].event_id === fst_lst.lst ? true : false;
+            if (request.rsm.after && !fst_lst.fst && !fst_lst.lst && results.length === 0) {
+                // assume end of archive
+                complete = true;
+            } else {
+                complete = archiveCache[archiveCache.length - 1].event_id === fst_lst.lst ? true : false;
+            }
         }
 
         return {
