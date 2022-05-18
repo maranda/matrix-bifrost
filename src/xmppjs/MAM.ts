@@ -158,14 +158,17 @@ export class MAMHandler {
             }
 
             if (request.rsm.before === true) {
-                archiveEnd = archiveCache.filter((ev) => ev.origin_server_ts < request.start.valueOf())?.length - 1;
+                archiveEnd = archiveCache.length - 1;
                 while (archiveEnd < max && previous !== archiveEnd && archiveCache.length <= MAM_CACHE_MAX_LENGTH) {
                     previous = archiveEnd;
                     await this.convergeEvRoomCache(request.roomId, intent, this.archivePaginationTokens.get(request.roomId));
-                    archiveEnd = archiveCache.filter((ev) => ev.origin_server_ts < request.start.valueOf())?.length - 1;
+                    archiveEnd = archiveCache.length - 1;
                 }
-                end_idx = archiveCache.findIndex((ev) => ev.origin_server_ts === request.start.valueOf()) - 1;
+                end_idx = archiveCache.length - 1;
             } else if (request.rsm.after === true) {
+                if (!request.start && !request.end) {
+                    throw Error("Need to specify either a start or end offset to request the page after it");
+                }
                 start_idx = archiveCache.findIndex((ev) => ev.origin_server_ts > request.start.valueOf());
                 end_idx = start_idx !== -1 ? start_idx + max : undefined;
             } else if (typeof request.rsm.before === "string" && typeof request.rsm.after === "string") {
