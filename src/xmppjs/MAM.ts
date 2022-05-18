@@ -131,10 +131,10 @@ export class MAMHandler {
                 previous = archiveCache.length;
             }
         } else if (request.end) {
-            archiveEnd = archiveCache.findIndex((ev) => ev.origin_server_ts <= request.start.valueOf());
+            archiveEnd = archiveCache.findIndex((ev) => ev.origin_server_ts <= request.end.valueOf());
             while (archiveEnd === -1 && previous !== archiveCache.length && archiveCache.length <= MAM_CACHE_MAX_LENGTH) {
                 await this.convergeEvRoomCache(request.roomId, intent, this.archivePaginationTokens.get(request.roomId));
-                archiveEnd = archiveCache.findIndex((ev) => ev.origin_server_ts <= request.start.valueOf());
+                archiveEnd = archiveCache.findIndex((ev) => ev.origin_server_ts <= request.end.valueOf());
                 previous = archiveCache.length;
             }
         }
