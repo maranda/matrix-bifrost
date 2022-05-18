@@ -138,6 +138,7 @@ export class MAMHandler {
                 previous = archiveCache.length;
             }
         }
+        log.info(`Got MAM parameters -> start:${request.start?.valueOf()} end:${request.end?.valueOf()} with:${request.with}`);
 
         if (!request.rsm) {
             // assume last page
@@ -169,7 +170,7 @@ export class MAMHandler {
                 if (!request.start && !request.end) {
                     throw Error("Need to specify either a start or end offset to request the page after it");
                 }
-                start_idx = archiveCache.findIndex((ev) => ev.origin_server_ts > request.start.valueOf());
+                start_idx = archiveCache.findIndex((ev) => ev.origin_server_ts > (request.start?.valueOf() || request.end?.valueOf()));
                 end_idx = start_idx !== -1 ? start_idx + max : undefined;
             } else if (typeof request.rsm.before === "string" && typeof request.rsm.after === "string") {
                 start_idx = archiveCache.findIndex((ev) => ev.event_id === request.rsm.after) + 1;
@@ -210,6 +211,7 @@ export class MAMHandler {
             } else {
                 complete = archiveCache[archiveCache.length - 1].event_id === fst_lst.lst ? true : false;
             }
+            log.info(`Returning ${results.length} messages`);
         }
 
         return {
