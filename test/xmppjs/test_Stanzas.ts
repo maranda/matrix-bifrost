@@ -55,7 +55,7 @@ describe("Stanzas", () => {
             assertXML(stanza.xml);
             expect(stanza.xml).to.equal(
                 "<message from=\"foo@bar\" to=\"baz@bar\" id=\"someid\" type='groupchat'>"
-                + "<body>Viva la matrix&#813;</body><markable xmlns='urn:xmpp:chat-markers:0'/></message>",
+                + "<body>Viva la matrix&#813;</body></message>",
             );
         });
         it("should create a valid stanza for a html message", () => {
@@ -66,7 +66,7 @@ describe("Stanzas", () => {
             expect(stanza.xml).to.equal(
                 "<message from=\"foo@bar\" to=\"baz@bar\" id=\"someid\" type='groupchat'><html><p>"
                 + "<strong>Viva la</strong> matrix&#813;</p></html><body>Viva la matrix&#813;</body>"
-                + "<markable xmlns='urn:xmpp:chat-markers:0'/></message>",
+                + "</message>",
             );
         });
         it("should create a valid stanza for a message with attachments", () => {
@@ -79,7 +79,7 @@ describe("Stanzas", () => {
                 "<message from=\"foo@bar\" to=\"baz@bar\" id=\"someid\" type='groupchat'><html><p>"
                 + "<strong>Viva la</strong> matrix&#x32D;</p></html><body>http://matrix.org</body>"
                 + "<x xmlns='jabber:x:oob'><url>http://matrix.org</url></x>"
-                + "<markable xmlns='urn:xmpp:chat-markers:0'/></message>",
+                + "</message>",
             );
         });
     });

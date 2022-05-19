@@ -253,7 +253,7 @@ export class StzaPresenceKick extends StzaPresenceItem {
 export class StzaMessage extends StzaBase {
     public html: string = "";
     public body: string = "";
-    public markable: boolean = true;
+    public markable: boolean = false;
     public attachments: string[] = [];
     public replacesId?: string;
     public retractsId?: string;
