@@ -107,7 +107,7 @@ export class MAMHandler {
                 log.info(`Bootstrapping archive for ${request.roomId}, attempting to fetch the last 5000 entries`);
                 await this.convergeEvRoomCache(request.roomId, intent);
                 archiveCache = this.mamCache.get(request.roomId);
-                while (previous !== archiveCache.length && archiveCache.length >= 5000) {
+                while (previous !== archiveCache.length && archiveCache.length <= 5000) {
                     await this.convergeEvRoomCache(request.roomId, intent, this.archivePaginationTokens.get(request.roomId));
                     previous = archiveCache.length;
                 }
