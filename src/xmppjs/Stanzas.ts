@@ -258,6 +258,7 @@ export class StzaMessage extends StzaBase {
     public replacesId?: string;
     public retractsId?: string;
     public retractsReason?: string;
+    public originId: string;
     constructor(
         from: string,
         to: string,
@@ -282,10 +283,11 @@ export class StzaMessage extends StzaBase {
             if (idOrMsg.redacted?.redact_id) {
                 this.retractsId = idOrMsg.redacted.redact_id;
             }
+            this.originId = idOrMsg.origin_id;
         } else if (idOrMsg) {
             this.id = idOrMsg as string;
         }
-        this.id = this.id || uuid();
+        this.id = this.id;
     }
 
     get type(): string {
@@ -334,7 +336,7 @@ export class StzaMessage extends StzaBase {
         // XEP-424
         const retracts = this.retractsId ? `<apply-to id='${this.retractsId}' xmlns='urn:xmpp:fasten:0'><retract xmlns='urn:xmpp:message-retract:0'/></apply-to>` : "";
         // XEP-0359
-        const originId = this.id && !this.replacesId && !this.retractsId ? `<origin-id id='${this.id}' xmlns='urn:xmpp:sid:0'/>` : "";
+        const originId = this.originId ? `<origin-id id='${this.originId}' xmlns='urn:xmpp:sid:0'/>` : "";
         const bodyEl = this.body ? `<body>${encode(this.body)}</body>` : "";
         const toAttr = this.to ? `to='${this.to}' ` : "";
         return `<message from='${this.from}' ${toAttr}id='${this.id}'${type}>`
@@ -366,7 +368,7 @@ export class StzaMessageSubject extends StzaBase {
 
 export class StzaMessageMAM extends StzaBase {
     private delay: string;
-    private entryXML: string;
+    private entryStza: StzaMessage;
     private entryId: string;
     private queryId: string;
     constructor(
@@ -382,8 +384,10 @@ export class StzaMessageMAM extends StzaBase {
                 (f) => { if (f.type === "html") { f.body = XHTMLIM.HTMLToXHTML(f.body); } },
             );
         }
-        this.entryXML = new StzaMessage(entry.from, undefined, entry.payload, "groupchat").xml;
-        this.entryId = entry.payload.id;
+        this.entryStza = new StzaMessage(entry.from, undefined, entry.payload, "groupchat");        
+        this.entryId = entry.payload?.id;
+        this.entryStza.originId = entry.originId;
+        this.entryStza.id = entry.originId ? entry.originId : this.entryStza.id;
         this.queryId = queryId ? ` queryid='${queryId}'` : "";
     }
 
@@ -394,7 +398,7 @@ export class StzaMessageMAM extends StzaBase {
     get xml(): string {
         return `<message from='${this.from}' to='${this.to}' id='${uuid()}'>`
             + `<result xmlns='urn:xmpp:mam:2'${this.queryId} id='${this.entryId}'><forwarded xmlns='urn:xmpp:forward:0'>`
-            + `<delay xmlns='urn:xmpp:delay' stamp='${this.delay}'/>${this.entryXML}`
+            + `<delay xmlns='urn:xmpp:delay' stamp='${this.delay}'/>${this.entryStza.xml}`
             + `</forwarded></result></message>`;
     }
 }

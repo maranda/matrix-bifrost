@@ -695,6 +695,7 @@ Say \`help\` for more commands.
         const recipient: string = context.remote.get("recipient");
         log.info(`Sending IM to ${recipient}`);
         const msg = MessageFormatter.matrixEventToBody(event as MatrixMessageEvent, this.config.bridge);
+        msg.origin_id = event.event_id;
         acct.sendIM(recipient, msg);
     }
 
@@ -715,6 +716,7 @@ Say \`help\` for more commands.
                 event: event,
             } as IFetchReceivedGroupMsg);
             const msg = MessageFormatter.matrixEventToBody(event as MatrixMessageEvent, this.config.bridge);
+            msg.origin_id = event.event_id;
             this.gatewayHandler.sendMatrixMessage(roomName, event.sender, msg, context);
             return;
         }
@@ -738,6 +740,7 @@ Say \`help\` for more commands.
                 await this.joinOrDefer(acct, roomName, props);
             }
             const msg = MessageFormatter.matrixEventToBody(event as MatrixMessageEvent, this.config.bridge);
+            msg.origin_id = event.event_id;
             let nick = "";
             // XXX: Gnarly way of trying to determine who we are.
             try {

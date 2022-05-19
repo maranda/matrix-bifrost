@@ -35,6 +35,7 @@ export interface MatrixMembershipEvent extends WeakEvent {
 export interface IMatrixMsgContents {
     msgtype: string;
     body: string;
+    origin_id?: string;
     remote_id?: string;
     info?: {mimetype: string, size: number};
     "m.relates_to"?: {

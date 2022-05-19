@@ -11,6 +11,7 @@ export interface IBasicProtocolMessage {
     body: string;
     formatted?: {type: string, body: string}[];
     id?: string;
+    origin_id?: string;
     original_message?: string;
     redacted?: {redact_id: string};
     opts?: {
@@ -90,6 +91,9 @@ export class MessageFormatter {
         };
         if (msg.id) {
             matrixMsg.remote_id = msg.id;
+        }
+        if (msg.origin_id) {
+            matrixMsg.origin_id = msg.origin_id;
         }
         const hasAttachment = msg.opts && msg.opts.attachments && msg.opts.attachments.length;
         if ([PRPL_XMPP, PRPL_S4B].includes(protocol.id)) {

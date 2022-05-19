@@ -4,7 +4,7 @@ import parse from "@xmpp/xml/lib/parse";
 import { jid, JID } from "@xmpp/jid";
 import { Bridge, Logging } from "matrix-appservice-bridge";
 import { IConfigBridge } from "../Config";
-import { IBasicProtocolMessage } from "..//MessageFormatter";
+import { IBasicProtocolMessage } from "../MessageFormatter";
 import {
     IGatewayJoin,
     IUserStateChanged,

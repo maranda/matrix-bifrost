@@ -354,7 +354,9 @@ export class MatrixRoomHandler {
             // do nothing
             log.info(`Received retraction by ${data.sender} for ${data.message.redacted.redact_id}`);
             try {
-                const isKnown = await this.store.getMatrixEventId(roomId, data.message.redacted.redact_id);
+                const isKnown = await intent.getEvent(roomId, data.message.redacted.redact_id, true).catch((ex) => {
+                    log.error("Failed to fetch original message for redaction:", ex);
+                }) as WeakEvent;
                 if (isKnown) {
                     await intent.getClient().redactEvent(roomId, data.message.redacted.redact_id);
                 } else {
@@ -449,11 +451,13 @@ export class MatrixRoomHandler {
             // do nothing
             log.info(`Received retraction by ${data.sender}, handling for ${data.message.redacted.redact_id} -> ${data.conv.name}`);
             try {
-                const isKnown = await this.store.getMatrixEventId(roomId, data.message.redacted.redact_id);
-                if (isKnown) {
+                const isKnown = await intent.getEvent(roomId, data.message.redacted.redact_id, true).catch((ex) => {
+                    log.error("Failed to fetch original message for redaction:", ex);
+                }) as WeakEvent;
+                if (isKnown?.sender === senderMatrixUser.userId) {
                     await intent.getClient().redactEvent(roomId, data.message.redacted.redact_id);
                 } else {
-                    throw Error(`Failed to redact, we don't know about ${data.message.redacted.redact_id}`);
+                    throw Error(`Failed to redact ${data.message.redacted.redact_id} -> ds:${senderMatrixUser.userId} ks:${isKnown?.sender}`);
                 }
             } catch (e) {
                 log.error(`Failed to redact message for this Group: ${e}`);
@@ -461,9 +465,16 @@ export class MatrixRoomHandler {
             return;
         }
         if (data.message.original_message) {
-            data.message.original_message = (
-                await this.store.getMatrixEventId(roomId, data.message.original_message)
-            ) || undefined;
+            if (data.message.origin_id) {
+                const ev = await intent.getEvent(roomId, data.message.origin_id, true).catch((ex) => {
+                    log.error("Failed to fetch original message:", ex);
+                });
+                data.message.original_message = ev?.event_id;
+            } else {
+                data.message.original_message = (
+                    await this.store.getMatrixEventId(roomId, data.message.original_message)
+                ) || undefined;
+            }
         }
         const content = await MessageFormatter.messageToMatrixEvent(data.message, protocol, intent);
         const { event_id } = await intent.sendMessage(roomId, content).catch((ex) => {

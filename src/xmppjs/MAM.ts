@@ -37,6 +37,8 @@ export interface IBifrostMAMEntry {
     from: string;
     to: string;
     payload: IBasicProtocolMessage;
+    originId?: string;
+    remoteId?: string;
 }
 
 export interface IBifrostMAMResultSet {
@@ -272,6 +274,8 @@ export class MAMHandler {
                 from: mucNick,
                 to: request.gatewayJID,
                 payload: MessageFormatter.matrixEventToBody(ev as MatrixMessageEvent, this.config),
+                originId: ev.content?.origin_id as string,
+                remoteId: ev.content?.remote_id as string,
             });
             lst = ev.event_id;
             count++;
