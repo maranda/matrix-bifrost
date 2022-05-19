@@ -255,6 +255,7 @@ export class StzaMessage extends StzaBase {
     public body: string = "";
     public markable: boolean = false;
     public attachments: string[] = [];
+    public addNS?: string;
     public replacesId?: string;
     public retractsId?: string;
     public retractsReason?: string;
@@ -287,7 +288,6 @@ export class StzaMessage extends StzaBase {
         } else if (idOrMsg) {
             this.id = idOrMsg as string;
         }
-        this.id = this.id;
     }
 
     get type(): string {
@@ -295,6 +295,7 @@ export class StzaMessage extends StzaBase {
     }
 
     get xml(): string {
+        const xmlns = this.addNS ? `xmlns='${this.addNS}' ` : "";
         const type = this.messageType ? ` type='${this.messageType}'` : "";
         const attachments = this.attachments.map((a) =>
             `<x xmlns='jabber:x:oob'><url>${encode(a)}</url></x>`,
@@ -339,7 +340,7 @@ export class StzaMessage extends StzaBase {
         const originId = this.originId ? `<origin-id id='${this.originId}' xmlns='urn:xmpp:sid:0'/>` : "";
         const bodyEl = this.body ? `<body>${encode(this.body)}</body>` : "";
         const toAttr = this.to ? `to='${this.to}' ` : "";
-        return `<message from='${this.from}' ${toAttr}id='${this.id}'${type}>`
+        return `<message ${xmlns}from='${this.from}' ${toAttr}id='${this.id}'${type}>`
             + `${this.html}${bodyEl}${attachments}${markable}${replaces}${retracts}${originId}</message>`;
     }
 }
@@ -384,8 +385,9 @@ export class StzaMessageMAM extends StzaBase {
                 (f) => { if (f.type === "html") { f.body = XHTMLIM.HTMLToXHTML(f.body); } },
             );
         }
-        this.entryStza = new StzaMessage(entry.from, undefined, entry.payload, "groupchat");        
+        this.entryStza = new StzaMessage(entry.from, undefined, entry.payload, "groupchat");
         this.entryId = entry.payload?.id;
+        this.entryStza.addNS = "jabber:client"; // add NS to forwarded stanza
         this.entryStza.originId = entry.originId;
         this.entryStza.id = entry.originId ? entry.originId : this.entryStza.id;
         this.queryId = queryId ? ` queryid='${queryId}'` : "";
