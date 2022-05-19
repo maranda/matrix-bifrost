@@ -312,6 +312,9 @@ export class MAMHandler {
         }
         this.archivePaginationTokens.set(roomId, messageBatch.end);
         for (const event of messageBatch.events) {
+            if (mamCache.find((ev) => ev.event_id === event.event_id)) {
+                continue; // perform deduplication
+            }
             mamCache.push(event);
         }
         if (token) { // sort out the array based on event age
