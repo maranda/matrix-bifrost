@@ -554,6 +554,7 @@ export class StzaIqMAMFields extends StzaIqQuery {
         this.mamFields.forEach((fieldType, fieldName) => {
             content = content + `<field var='${fieldName}' type='${fieldType}'/>`;
         });
+        content + "</x>";
         return content;
     }
 }
