@@ -106,6 +106,7 @@ export class MAMHandler {
                 // bootstrap archive
                 log.info(`Bootstrapping archive for ${request.roomId}, attempting to fetch the last 5000 entries`);
                 await this.convergeEvRoomCache(request.roomId, intent);
+                archiveCache = this.mamCache.get(request.roomId);
                 while (previous !== archiveCache.length && archiveCache.length >= 5000) {
                     await this.convergeEvRoomCache(request.roomId, intent, this.archivePaginationTokens.get(request.roomId));
                     previous = archiveCache.length;
@@ -209,7 +210,7 @@ export class MAMHandler {
                 // assume end of archive
                 complete = true;
             } else {
-                complete = archiveCache[archiveCache.length - 1].event_id === fst_lst.lst ? true : false;
+                complete = archiveCache[archiveCache.length - 1]?.event_id === fst_lst.lst ? true : false;
             }
             log.info(`Returning ${results.length} messages`);
         }
