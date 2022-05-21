@@ -12,8 +12,9 @@ export interface IBasicProtocolMessage {
     formatted?: {type: string, body: string}[];
     id?: string;
     origin_id?: string;
+    stanza_id?: string;
     original_message?: string;
-    redacted?: {redact_id: string};
+    redacted?: {redact_id: string, moderation?: boolean, reason?: string};
     opts?: {
         attachments?: IMessageAttachment[];
     };
@@ -35,7 +36,7 @@ export class MessageFormatter {
                 body: "A retract was attempted, but it's unsupported by your client",
                 formatted,
                 id: event.event_id,
-                redacted: {redact_id: event.redacts}
+                redacted: {redact_id: event.redacts, reason: event.content?.reason},
             }
         }
         let content = event.content;
@@ -94,6 +95,9 @@ export class MessageFormatter {
         }
         if (msg.origin_id) {
             matrixMsg.origin_id = msg.origin_id;
+        }
+        if (msg.stanza_id) {
+            matrixMsg.stanza_id = msg.stanza_id;
         }
         const hasAttachment = msg.opts && msg.opts.attachments && msg.opts.attachments.length;
         if ([PRPL_XMPP, PRPL_S4B].includes(protocol.id)) {

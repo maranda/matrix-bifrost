@@ -783,8 +783,19 @@ Say \`help\` for more commands.
         const roomName: string = context.remote.get("room_name");
         const msg = MessageFormatter.matrixEventToBody(event as MatrixMessageEvent, this.config.bridge);
         if (isGateway) {
-            this.gatewayHandler.sendMatrixMessage(roomName, event.sender, msg, context);
-            return;
+            try {
+                const originalEvent = await this.bridge.getIntent().getEvent(event.room_id, event.redacts as string) as WeakEvent;
+                if (originalEvent.content?.stanza_id) {
+                    msg.redacted.redact_id = originalEvent.content.stanza_id as string;
+                }
+                msg.redacted.moderation = true;
+                msg.body = undefined;
+                this.gatewayHandler.sendMatrixMessage(roomName, event.sender, msg, context);
+                return;
+            } catch (ex) {
+                log.error(`Couldn't handle ${event.event_id} to gateway, ${ex}`);
+                return;
+            }
         }
         let acct: IBifrostAccount;
         const roomProtocol: string = context.remote.get("protocol_id");
@@ -792,7 +803,7 @@ Say \`help\` for more commands.
         try {
             let originalSender: string;
             if (!recipient) {
-                const originalEvent = await this.bridge.getIntent().getEvent(event.room_id, event.redacts as string);
+                const originalEvent = await this.bridge.getIntent().getEvent(event.room_id, event.redacts as string) as WeakEvent;
                 originalSender = originalEvent?.sender;
             }
             acct = (await this.getAccountForMxid(originalSender || event.sender, roomProtocol)).acct;

@@ -279,8 +279,10 @@ export class ServiceHandler {
             discoInfo.feature.add(XMPPFeatures.DiscoInfo);
             discoInfo.feature.add(XMPPFeatures.Muc);
             discoInfo.feature.add(XMPPFeatures.MessageCorrection);
+            discoInfo.feature.add(XMPPFeatures.MessageModeration);
             discoInfo.feature.add(XMPPFeatures.MessageRetraction);
             discoInfo.feature.add(XMPPFeatures.MessageArchiveManagement);
+            discoInfo.feature.add(XMPPFeatures.StableStanzaIDs);
             discoInfo.feature.add(XMPPFeatures.XHTMLIM);
             discoInfo.feature.add(XMPPFeatures.vCard);
             discoInfo.identity.add({

@@ -197,24 +197,30 @@ export class XmppJsGateway implements IGateway {
                 }
             });
         }
-        const msgs = [...this.members.getXmppMembersDevices(chatName)].map((device) =>
-            new StzaMessage(
-                from.anonymousJid.toString(),
+        const msgs = [...this.members.getXmppMembersDevices(chatName)].map((device) => {
+            const stanza = new StzaMessage(
+                msg.redacted?.moderation ? chatName : from.anonymousJid.toString(),
                 device,
                 msg,
                 "groupchat",
-            )
-        );
+            );
+            if (!msg.redacted) {
+                stanza.stanzaId = msg.id
+            }
+            return stanza;
+        });
 
         // add the message to the room history
         const historyStanza = new StzaMessage(
-            from.anonymousJid.toString(),
+            msg.redacted?.moderation ? chatName : from.anonymousJid.toString(),
             "",
             msg,
             "groupchat",
         );
+        historyStanza.stanzaId = !msg.redacted ? msg.id : undefined;
         if (room.allowHistory) {
-            this.roomHistory.addMessage(chatName, parse(historyStanza.xml), from.anonymousJid);
+            this.roomHistory.addMessage(chatName, parse(historyStanza.xml),
+                msg.redacted?.moderation ? from.anonymousJid.bare() : from.anonymousJid);
         }
 
         return this.xmpp.xmppSendBulk(msgs);

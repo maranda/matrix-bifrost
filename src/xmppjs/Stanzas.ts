@@ -6,6 +6,7 @@ import { XMPPFeatures, XMPPStatusCode } from "./XMPPConstants";
 import { Util } from "../Util";
 import { IBifrostMAMEntry } from "./MAM";
 import { XHTMLIM } from "./XHTMLIM";
+import { jid, JID } from "@xmpp/jid";
 
 const REGEXP_AS_PREFIX = /@(_[a-zA-Z0-9]+_).*/;
 const REGEXP_HTML_TRAIL = /(<a href=['"]#['"]>)(@[a-zA-Z0-9_.=-]+:[a-zA-Z0-9.-]+)(<\/a>)/;
@@ -257,9 +258,11 @@ export class StzaMessage extends StzaBase {
     public attachments: string[] = [];
     public addNS?: string;
     public replacesId?: string;
-    public retractsId?: string;
-    public retractsReason?: string;
+    public redactsId?: string;
     public originId: string;
+    public stanzaId: string;
+    public moderation?: boolean;
+    public moderationReason?: string;
     constructor(
         from: string,
         to: string,
@@ -282,9 +285,12 @@ export class StzaMessage extends StzaBase {
                 this.replacesId = idOrMsg.original_message;
             }
             if (idOrMsg.redacted?.redact_id) {
-                this.retractsId = idOrMsg.redacted.redact_id;
+                this.redactsId = idOrMsg.redacted.redact_id;
+                this.moderation = idOrMsg.redacted.moderation;
+                this.moderationReason = idOrMsg.redacted.reason;
             }
             this.originId = idOrMsg.origin_id;
+            this.stanzaId = idOrMsg.stanza_id;
         } else if (idOrMsg) {
             this.id = idOrMsg as string;
         }
@@ -334,14 +340,27 @@ export class StzaMessage extends StzaBase {
         const markable = this.markable ? "<markable xmlns='urn:xmpp:chat-markers:0'/>" : "";
         // XEP-0308
         const replaces = this.replacesId ? `<replace id='${this.replacesId}' xmlns='urn:xmpp:message-correct:0'/>` : "";
-        // XEP-424
-        const retracts = this.retractsId ? `<apply-to id='${this.retractsId}' xmlns='urn:xmpp:fasten:0'><retract xmlns='urn:xmpp:message-retract:0'/></apply-to>` : "";
+        // XEP-424 / XEP-425
+        let redacts: string = "";
+        if (this.moderation) {
+            redacts = `<apply-to id='${this.redactsId}' xmlns='urn:xmpp:fasten:0'>`
+                + `<moderate xmlns='urn:xmpp:message-moderate:0'><retract xmlns='urn:xmpp:message-retract:0'/>`
+                + `${this.moderationReason ? `<reason>${this.moderationReason}</reason>` : ""}</moderate>`
+                + `</apply-to>`;
+        } else if (this.redactsId) {
+            redacts = `<apply-to id='${this.redactsId}' xmlns='urn:xmpp:fasten:0'><retract xmlns='urn:xmpp:message-retract:0'/></apply-to>`;
+        }
         // XEP-0359
         const originId = this.originId ? `<origin-id id='${this.originId}' xmlns='urn:xmpp:sid:0'/>` : "";
+        let stanzaId: string = "";
+        if (this.stanzaId) {
+            let bareJid = jid(this.from).bare();
+            stanzaId = `<stanza-id id='${this.stanzaId}' xmlns='urn:xmpp:sid:0' by='${bareJid.toString()}'/>`;
+        }
         const bodyEl = this.body ? `<body>${encode(this.body)}</body>` : "";
         const toAttr = this.to ? `to='${this.to}' ` : "";
         return `<message ${xmlns}from='${this.from}' ${toAttr}id='${this.id}'${type}>`
-            + `${this.html}${bodyEl}${attachments}${markable}${replaces}${retracts}${originId}</message>`;
+            + `${this.html}${bodyEl}${attachments}${markable}${replaces}${redacts}${originId}${stanzaId}</message>`;
     }
 }
 

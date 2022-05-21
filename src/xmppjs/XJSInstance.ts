@@ -691,6 +691,12 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 // and set the right to/from addresses.
                 convName = Util.prepJID(to);
                 log.info(`Sending gateway group message to ${convName}`);
+                // stamp our own stanza-id on the message
+                if (stanza.getChild("stanza-id", "urn:xmpp:sid:0")) {
+                    // remove spoofed stanza-id
+                    stanza.remove("stanza-id", "urn:xmpp:sid:0");
+                }
+                stanza.c("stanza-id", { xmlns: "urn:xmpp:sid:0", id: uuid(), by: convName, });
                 if (!(await this.gateway!.reflectXMPPMessage(convName, stanza))) {
                     log.warn(`Message could not be sent, not forwarding to Matrix`);
                     return;
@@ -887,7 +893,8 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         const body = stanza.getChildText("body");
         const replace = stanza.getChildByAttr("xmlns", "urn:xmpp:message-correct:0");
         const retract = stanza.getChildByAttr("xmlns", "urn:xmpp:fasten:0");
-        const origin_id = stanza.getChildByAttr("xmlns", "urn:xmpp:sid:0");
+        const origin_id = stanza.getChild("origin-id", "urn:xmpp:sid:0");
+        const stanza_id = stanza.getChild("stanza-id", "urn:xmpp:sid:0");
         const type = stanza.attrs.type;
         const attachments: IMessageAttachment[] = [];
         // https://xmpp.org/extensions/xep-0066.html#x-oob
@@ -906,6 +913,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             formatted: [],
             id: stanza.attrs.id,
             origin_id: origin_id ? origin_id.getAttr("id") : undefined,
+            stanza_id: stanza_id ? stanza_id.getAttr("id") : undefined,
             original_message: replace ? replace.getAttr("id") : undefined,
             redacted: retract?.getChildByAttr("xmlns", "urn:xmpp:message-retract:0") ?
                 { redact_id: retract.getAttr("id") } : undefined,

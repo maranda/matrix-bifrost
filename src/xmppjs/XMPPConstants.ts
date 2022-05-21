@@ -19,7 +19,9 @@ export enum XMPPFeatures {
     IqSearch = "jabber:iq:search",
     MessageArchiveManagement = "urn:xmpp:mam:2",
     MessageCorrection = "urn:xmpp:message-correct:0",
+    MessageModeration = "urn:xmpp:message-moderate:0",
     MessageRetraction = "urn:xmpp:message-retract:0",
+    StableStanzaIDs = "urn:xmpp:sid:0",
     XHTMLIM = "http://jabber.org/protocol/xhtml-im",
     vCard = "vcard-temp",
 }
