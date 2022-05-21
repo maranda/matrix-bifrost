@@ -907,7 +907,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             id: stanza.attrs.id,
             origin_id: origin_id ? origin_id.getAttr("id") : undefined,
             original_message: replace ? replace.getAttr("id") : undefined,
-            redacted: retract && retract.getChildByAttr("xmlns", "urn:xmpp:message-retract:0") ?
+            redacted: retract?.getChildByAttr("xmlns", "urn:xmpp:message-retract:0") ?
                 { redact_id: retract.getAttr("id") } : undefined,
             opts: {
                 attachments,

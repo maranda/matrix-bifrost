@@ -465,16 +465,9 @@ export class MatrixRoomHandler {
             return;
         }
         if (data.message.original_message) {
-            if (data.message.origin_id) {
-                const ev = await intent.getEvent(roomId, data.message.origin_id, true).catch((ex) => {
-                    log.error("Failed to fetch original message:", ex);
-                });
-                data.message.original_message = ev?.event_id;
-            } else {
-                data.message.original_message = (
-                    await this.store.getMatrixEventId(roomId, data.message.original_message)
-                ) || undefined;
-            }
+            data.message.original_message = (
+                await this.store.getMatrixEventId(roomId, data.message.original_message)
+            ) || undefined;
         }
         const content = await MessageFormatter.messageToMatrixEvent(data.message, protocol, intent);
         const { event_id } = await intent.sendMessage(roomId, content).catch((ex) => {
