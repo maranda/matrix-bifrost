@@ -278,10 +278,12 @@ export class GatewayHandler {
             let roomAvatar: any;
             let roomDesc: any;
             let roomOccupants: number;
+            let historyVis: any;
             try {
                 const state = await this.bridge.getIntent().roomState(res.room_id) as WeakEvent[];
                 const roomEv = state.find((ev) => ev.type === "m.room.name");
                 const avatarEv = state.find((ev) => ev.type === "m.room.avatar");
+                historyVis = state.find((ev) => ev.type === "m.room.history_visibility");
                 roomOccupants = state.filter((ev) => (ev.type === "m.room.member" && ev.content.membership === "join")).length;
                 roomAvatar = avatarEv ? avatarEv.content.url : "";
                 roomDesc = roomEv ? roomEv.content.name : "";
@@ -290,6 +292,7 @@ export class GatewayHandler {
             }
             log.info(`Found ${res.room_id}`);
             ev.result(null, {
+                allowHistory: historyVis?.content?.history_visibility || 'joined',
                 roomId: res.room_id,
                 roomAvatar: roomAvatar,
                 roomDesc: roomDesc,

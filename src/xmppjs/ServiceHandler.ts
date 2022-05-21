@@ -471,6 +471,11 @@ export class ServiceHandler {
                 const response = new StzaIqMAMFields(to, from, id, this.xmpp.mamHandler.supportedFields());
                 await this.xmpp.xmppSend(response);
             } else if (type === "set") {
+                if (roomData.allowHistory !== "shared" && roomData.allowHistory !== "world_readable") {
+                    await this.xmpp.xmppSend(new StzaIqError(to, from, id, "cancel", 405, "not-allowed", undefined,
+                        `Room history visibility needs to be set to either shared or world_readable it currently is: ${roomData.allowHistory}`));
+                    return;
+                }
                 const data = query.getChildByAttr("xmlns", "jabber:x:data");
                 const queryId = query.getAttr("queryid");
                 const qStart = data?.getChildByAttr("var", "start")?.getChildText("value");
