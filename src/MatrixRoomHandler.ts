@@ -383,7 +383,9 @@ export class MatrixRoomHandler {
                 const keyArr = [...this.remoteEventIdMapping.keys()].slice(0, 50);
                 keyArr.forEach(this.remoteEventIdMapping.delete.bind(this.remoteEventIdMapping));
             }
-            await this.store.storeRoomEvent(roomId, event_id, data.message.id).catch((ev) => {
+            await this.store.storeRoomEvent(
+                roomId, event_id, data.message.id, data.message.origin_id, data.message.stanza_id
+            ).catch((ev) => {
                 log.warn("Failed to store event mapping:", ev);
             });
         }
@@ -480,7 +482,9 @@ export class MatrixRoomHandler {
             }),
         } as IFetchReceivedGroupMsg);
         if (data.message.id) {
-            await this.store.storeRoomEvent(roomId, event_id, data.message.id).catch((ex) => {
+            await this.store.storeRoomEvent(
+                roomId, event_id, data.message.id, data.message.origin_id, data.message.stanza_id
+            ).catch((ex) => {
                 log.warn("Failed to store event mapping:", ex);
             });
         }
