@@ -480,7 +480,7 @@ export class PgDataStore implements IStore {
 
     public async getOriginIdFromEvent(roomId: string, matrixEventId: string) {
         const ev = await this.pgPool.query(
-            "SELECT matrix_id FROM events WHERE room_id = $1 AND matrix_id = $2", [roomId, matrixEventId],
+            "SELECT origin_id FROM events WHERE room_id = $1 AND matrix_id = $2", [roomId, matrixEventId],
         );
         if (ev.rowCount) {
             return ev.rows[0].origin_id;
@@ -490,7 +490,7 @@ export class PgDataStore implements IStore {
 
     public async getStanzaIdFromEvent(roomId: string, matrixEventId: string) {
         const ev = await this.pgPool.query(
-            "SELECT matrix_id FROM events WHERE room_id = $1 AND matrix_id = $2", [roomId, matrixEventId],
+            "SELECT stanza_id FROM events WHERE room_id = $1 AND matrix_id = $2", [roomId, matrixEventId],
         );
         if (ev.rowCount) {
             return ev.rows[0].stanza_id;
