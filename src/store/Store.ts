@@ -42,6 +42,8 @@ export interface IStore {
 
     getRoomsOfType(type: MROOM_TYPES): Promise<RoomBridgeStoreEntry[]>;
 
+    listLocalSenderNames(): Promise<Set<string>>;
+
     storeGhost(userId: string, protocol: BifrostProtocol, username: string, extraData?: any)
     : Promise<{remote: BifrostRemoteUser, matrix: MatrixUser}>;
     storeAccount(userId: string, protocol: BifrostProtocol, username: string, extraData?: any): Promise<void>;

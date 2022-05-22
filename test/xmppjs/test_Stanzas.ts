@@ -1,6 +1,6 @@
 import * as Chai from "chai";
 import { StzaPresenceItem, StzaPresenceError, StzaMessageSubject,
-    StzaMessage, StzaPresencePart, StzaPresenceKick, SztaIqError } from "../../src/xmppjs/Stanzas";
+    StzaMessage, StzaPresencePart, StzaPresenceKick, StzaIqError } from "../../src/xmppjs/Stanzas";
 import { assertXML } from "./util";
 const expect = Chai.expect;
 
@@ -55,7 +55,7 @@ describe("Stanzas", () => {
             assertXML(stanza.xml);
             expect(stanza.xml).to.equal(
                 "<message from=\"foo@bar\" to=\"baz@bar\" id=\"someid\" type='groupchat'>"
-                + "<body>Viva la matrix&#813;</body><markable xmlns='urn:xmpp:chat-markers:0'/></message>",
+                + "<body>Viva la matrix&#813;</body></message>",
             );
         });
         it("should create a valid stanza for a html message", () => {
@@ -66,7 +66,7 @@ describe("Stanzas", () => {
             expect(stanza.xml).to.equal(
                 "<message from=\"foo@bar\" to=\"baz@bar\" id=\"someid\" type='groupchat'><html><p>"
                 + "<strong>Viva la</strong> matrix&#813;</p></html><body>Viva la matrix&#813;</body>"
-                + "<markable xmlns='urn:xmpp:chat-markers:0'/></message>",
+                + "</message>",
             );
         });
         it("should create a valid stanza for a message with attachments", () => {
@@ -79,7 +79,7 @@ describe("Stanzas", () => {
                 "<message from=\"foo@bar\" to=\"baz@bar\" id=\"someid\" type='groupchat'><html><p>"
                 + "<strong>Viva la</strong> matrix&#x32D;</p></html><body>http://matrix.org</body>"
                 + "<x xmlns='jabber:x:oob'><url>http://matrix.org</url></x>"
-                + "<markable xmlns='urn:xmpp:chat-markers:0'/></message>",
+                + "</message>",
             );
         });
     });
@@ -93,9 +93,9 @@ describe("Stanzas", () => {
             );
         });
     });
-    describe("SztaIqError", () => {
+    describe("StzaIqError", () => {
         it("should create a an error", () => {
-            const xml = new SztaIqError("foo@bar", "baz@bar", "someid", "cancel", null, "not-acceptable", "foo").xml;
+            const xml = new StzaIqError("foo@bar", "baz@bar", "someid", "cancel", null, "not-acceptable", "foo").xml;
             assertXML(xml);
             expect(xml).to.equal(
                 "<iq from='foo@bar' to='baz@bar' id='someid' type='error' xml:lang='en'>" +
@@ -105,7 +105,7 @@ describe("Stanzas", () => {
         });
     });
     it("should create a an error with custom text", () => {
-        const xml = new SztaIqError("foo@bar", "baz@bar", "someid", "cancel", null, "not-acceptable", "foo", "Something isn't right").xml;
+        const xml = new StzaIqError("foo@bar", "baz@bar", "someid", "cancel", null, "not-acceptable", "foo", "Something isn't right").xml;
         assertXML(xml);
         expect(xml).to.equal(
             "<iq from='foo@bar' to='baz@bar' id='someid' type='error' xml:lang='en'>" +

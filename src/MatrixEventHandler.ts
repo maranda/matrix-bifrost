@@ -12,7 +12,7 @@ import { Deduplicator } from "./Deduplicator";
 import { AutoRegistration } from "./AutoRegistration";
 import { Config } from "./Config";
 import { IStore } from "./store/Store";
-import { IAccountEvent, IChatJoinProperties, IChatJoined, IConversationEvent } from "./bifrost/Events";
+import { IAccountEvent, IChatJoinProperties, IChatJoined, IConversationEvent, IFetchReceivedGroupMsg } from "./bifrost/Events";
 import { ProtoHacks } from "./ProtoHacks";
 import { RoomAliasSet } from "./RoomAliasSet";
 import { MessageFormatter } from "./MessageFormatter";
@@ -264,6 +264,13 @@ export class MatrixEventHandler {
             this.handleStateEv(ctx, event);
         }
 
+        if (event.type === "m.room.redaction") {
+            if (this.bridge.getBot().isRemoteUser(event.sender)) {
+                return; // don't handle our own redactions
+            }
+            await this.handleRedaction(ctx, event);
+        }
+
         if (event.type !== "m.room.message") {
             // We are only handling bridged room messages now.
             return;
@@ -444,7 +451,7 @@ export class MatrixEventHandler {
         const powerLevels = await intent.getStateEvent(event.room_id, "m.room.power_levels");
         const userPl = powerLevels.users[event.sender] === undefined ? powerLevels.users_default :
             powerLevels.users[event.sender];
-        if (userPl < requiredPl) {
+        if (userPl < requiredPl && event.sender !== this.config.bridge.adminMxID) {
             log.warn(`${event.sender}'s PL is too low to run a plumbing command ${userPl} < ${requiredPl}`);
             return;
         }
@@ -465,7 +472,14 @@ export class MatrixEventHandler {
                 if (paramSet != null) {
                     let roomExists = await this.store.getRoomEntryByMatrixId(event.room_id);
                     if (roomExists) {
-                        throw new Error("Room already exists in the database");
+                        if (roomExists.matrix.get("type") !== MROOM_TYPE_GROUP) {
+                            throw new Error("Can only plumb group type rooms (at least 3 people including the Bot), not IM or Admin");
+                        } else {
+                            throw new Error("Room already exists in the database");
+                        }
+                    }
+                    if (event.content.displayname) {
+                        paramSet.handle = event.content.displayname as string;
                     }
                     await ProtoHacks.addJoinProps(protocol.id, paramSet, event.sender, intent);
                     // We want to join the room to make sure it works.
@@ -487,6 +501,7 @@ export class MatrixEventHandler {
                         `${acct.protocol.id}:${res.conv.name}`,
                     ).toString("base64");
                     await this.store.storeRoom(event.room_id, MROOM_TYPE_GROUP, remoteId, remoteData);
+                    this.purple.emit("remove-room-lock", { roomId: remoteId });
                     // Fetch Matrix members and join them.
                     try {
                         const userIds = Object.keys(await this.bridge.getBot().getJoinedMembers(event.room_id));
@@ -504,13 +519,57 @@ export class MatrixEventHandler {
                         }));
                     } catch (ex) {
                         log.warn("Syncing users to newly plumbed room failed: ", ex);
+                    } finally {
+                        await intent.sendMessage(event.room_id, {
+                            msgtype: "m.notice",
+                            body: "Successfully plumbed room " + event.room_id,
+                        });
                     }
                 }
             } else if (args[1] === "leave") {
                 log.info(event.sender, "is unbridging", event.room_id);
-                await this.store.removeRoomByRoomId(event.room_id);
-                const intent = this.bridge.getIntent();
-                intent.leave(event.room_id);
+                try {
+                    const roomCtx = await this.store.getRoomEntryByMatrixId(event.room_id);
+                    const state = await intent.roomState(event.room_id);
+                    const props = roomCtx.remote.get<IChatJoinProperties>("properties");
+                    const protocol_id = roomCtx.remote.get<string>("protocol_id");
+                    let occupants = state.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
+                        {
+                            isRemote: this.bridge.getBot().isRemoteUser(e.sender),
+                            stateKey: e.state_key,
+                            displayname: e.content.displayname,
+                            membership: e.content.membership,
+                        }
+                    ));
+                    log.info(`purging occupants from ${event.room_id}`);
+                    const protocol = this.purple.getProtocol(protocol_id);
+                    await Promise.all(occupants.map(async (userId) => {
+                        if (userId.membership === "join") {
+                            if (!userId.isRemote) {
+                                log.info(`purging remote user from ${event.room_id} -> ${userId.stateKey}`);
+                                const getAcctRes = await this.getAccountForMxid(userId.stateKey, protocol.id);
+                                await ProtoHacks.addJoinProps(protocol.id, props, userId.stateKey, userId.displayname || userId.stateKey);
+                                await getAcctRes.acct.rejectChat(props);
+                            } else {
+                                log.info(`purging matrix user from ${event.room_id} -> ${userId.stateKey}`);
+                                const data = await this.store.getRemoteUsersFromMxId(userId.stateKey);
+                                this.bridge.getIntent(userId.stateKey).leave(event.room_id).catch((err) => {
+                                    log.debug("Failed to remove puppet:", err);
+                                }).finally(() => {
+                                    if (data.length === 1) {
+                                        this.store.removeGhost(userId, protocol, data[0].username);
+                                    }
+                                });
+                            }
+                        }
+                    }));
+                } catch (ex) {
+                    log.error("Failed to unbridge room:", ex);
+                } finally {
+                    await this.store.removeRoomByRoomId(event.room_id);
+                    const intent = this.bridge.getIntent();
+                    intent.leave(event.room_id);
+                }
             }
         } catch (ex) {
             log.warn("Plumbing operation didn't succeed:", ex);
@@ -636,6 +695,7 @@ Say \`help\` for more commands.
         const recipient: string = context.remote.get("recipient");
         log.info(`Sending IM to ${recipient}`);
         const msg = MessageFormatter.matrixEventToBody(event as MatrixMessageEvent, this.config.bridge);
+        msg.origin_id = event.event_id;
         acct.sendIM(recipient, msg);
     }
 
@@ -649,25 +709,38 @@ Say \`help\` for more commands.
         log.info(`Handling group message for ${event.room_id}`);
         const roomProtocol: string = context.remote.get("protocol_id");
         const isGateway: boolean = context.remote.get("gateway");
-        const name: string = context.remote.get("room_name");
+        const roomName: string = context.remote.get("room_name");
         if (isGateway) {
+            this.purple.emit("mam-add-entry", {
+                room_id: event.room_id,
+                event: event,
+            } as IFetchReceivedGroupMsg);
             const msg = MessageFormatter.matrixEventToBody(event as MatrixMessageEvent, this.config.bridge);
-            this.gatewayHandler.sendMatrixMessage(name, event.sender, msg, context);
+            msg.origin_id = event.event_id;
+            this.gatewayHandler.sendMatrixMessage(roomName, event.sender, msg, context);
             return;
         }
         try {
             const {acct, newAcct} = await this.getAccountForMxid(event.sender, roomProtocol);
             log.info(`Got ${acct.name} for ${event.sender}`);
-            if (!acct.isInRoom(name)) {
-                log.debug(`${event.sender} talked in ${name}, joining them.`);
+            if (!acct.isInRoom(roomName)) {
+                log.debug(`${event.sender} talked in ${roomName}, joining them.`);
                 const props = Util.desanitizeProperties(
                     Object.assign({}, context.remote.get("properties")),
                 );
-                await ProtoHacks.addJoinProps(acct.protocol.id, props, event.sender, this.bridge.getIntent());
-                await this.joinOrDefer(acct, name, props);
+                const intent = this.bridge.getIntent();
+                await ProtoHacks.addJoinProps(acct.protocol.id, props, event.sender, intent);
+                const state = await intent.roomState(event.room_id) as WeakEvent[];
+                const membership = state.find((ev) =>
+                    ev.type === "m.room.member" && ev.state_key === event.sender && ev.content.membership === "join"
+                );
+                if (membership?.content.displayname) {
+                    props.handle = membership.content.displayname as string;
+                }
+                await this.joinOrDefer(acct, roomName, props);
             }
-            const roomName: string = context.remote.get("room_name");
             const msg = MessageFormatter.matrixEventToBody(event as MatrixMessageEvent, this.config.bridge);
+            msg.origin_id = event.event_id;
             let nick = "";
             // XXX: Gnarly way of trying to determine who we are.
             try {
@@ -692,9 +765,60 @@ Say \`help\` for more commands.
                     msg.body,
                 );
             }
-            acct.sendChat(context.remote.get("room_name"), msg);
+            acct.sendChat(roomName, msg);
         } catch (ex) {
             log.error("Couldn't send message to chat:", ex);
+        }
+    }
+
+    private async handleRedaction(context: RoomBridgeStoreEntry, event: WeakEvent) {
+        if (!context.remote || !context.matrix) {
+            throw Error('Cannot handle message, remote or matrix not defined');
+        }
+        if (!this.bridge) {
+            throw Error('bridge is not defined yet')
+        }
+        log.info(`Handling redaction for ${event.room_id}`);
+        const isGateway: boolean = context.remote.get("gateway");
+        const roomName: string = context.remote.get("room_name");
+        const msg = MessageFormatter.matrixEventToBody(event as MatrixMessageEvent, this.config.bridge);
+        if (isGateway) {
+            try {
+                const originalEvent = await this.bridge.getIntent().getEvent(event.room_id, event.redacts as string) as WeakEvent;
+                if (originalEvent.content?.stanza_id) {
+                    msg.redacted.redact_id = originalEvent.content.stanza_id as string;
+                }
+                msg.redacted.moderation = true;
+                msg.body = undefined;
+                this.gatewayHandler.sendMatrixMessage(roomName, event.sender, msg, context);
+                return;
+            } catch (ex) {
+                log.error(`Couldn't handle ${event.event_id} to gateway, ${ex}`);
+                return;
+            }
+        }
+        let acct: IBifrostAccount;
+        const roomProtocol: string = context.remote.get("protocol_id");
+        const recipient: string = context.remote.get("recipient");
+        try {
+            let originalSender: string;
+            if (!recipient) {
+                const originalEvent = await this.bridge.getIntent().getEvent(event.room_id, event.redacts as string) as WeakEvent;
+                originalSender = originalEvent?.sender;
+            }
+            acct = (await this.getAccountForMxid(originalSender || event.sender, roomProtocol)).acct;
+        } catch (ex) {
+            log.error(`Couldn't handle ${event.event_id}, ${ex}`);
+            return;
+        }
+        if (recipient) {
+            // it's an IM
+            acct.sendIM(recipient, msg);
+            return;
+        }
+        if (roomName) {
+            // it's a Group
+            acct.sendChat(roomName, msg);
         }
     }
 
@@ -709,11 +833,11 @@ Say \`help\` for more commands.
         if (!event.state_key || !membership) {
             return;
         }
-        log.info(`Handling group ${event.state_key} ${membership}`);
         let acct: IBifrostAccount;
         const isGateway: boolean = context.remote.get("gateway");
         const name: string = context.remote.get("room_name");
         const roomProtocol: string = context.remote.get("protocol_id");
+        log.info(`Handling group ${event.state_key} ${membership} -> isGateway=${isGateway} name=${name} roomProtocol=${roomProtocol}`);
         if (isGateway) {
             await this.gatewayHandler.sendMatrixMembership(
                 name, context, event,
@@ -737,6 +861,9 @@ Say \`help\` for more commands.
         log.info(`Sending ${membership} to`, props);
         if (membership === "join") {
             await ProtoHacks.addJoinProps(acct.protocol.id, props, event.state_key, this.bridge.getIntent());
+            if (event.content.displayname) {
+                props.handle = event.content.displayname;
+            }
             this.joinOrDefer(acct, name, props);
         } else if (membership === "leave") {
             await acct.rejectChat(props);

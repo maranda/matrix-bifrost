@@ -20,13 +20,14 @@ function sendToAllDevices(presence: StzaPresenceItem, devices: Set<string>) {
             undefined,
             presence.presenceType,
             presence.avatarHash,
+            presence.newNick,
         )
     )
 
 }
 
 export class GatewayStateResolve {
-    static resolveMatrixStateToXMPP(chatName: string, members: GatewayMUCMembership, event: MatrixMembershipEvent, room: IGatewayRoom): IStza[] {
+    static resolveMatrixStateToXMPP(chatName: string, members: GatewayMUCMembership, event: MatrixMembershipEvent, room: IGatewayRoom, rename: boolean): IStza[] {
         const membership = event.content.membership;
         let stanzas: IStza[] = [];
         const allDevices = members.getXmppMembersDevices(chatName);
@@ -38,10 +39,28 @@ export class GatewayStateResolve {
         const existingMember = members.getMatrixMemberByMatrixId(chatName, event.state_key);
         const xmppMember = members.getXmppMemberByMatrixId(chatName, event.state_key);
         if (membership === "join") {
-            log.info(`Joining a Matrix user ${event.state_key}`);
+            log.info(`${rename ? "Renaming" : "Joining"} a Matrix user ${event.state_key}`);
             if (existingMember) {
-                // Do not handle if we already have them
-                return [];
+                if (rename) {
+                    members.removeMatrixMember(chatName, event.state_key);
+                    const rlPresence = new StzaPresenceItem(
+                        existingMember.anonymousJid.toString(),
+                        "",
+                        undefined,
+                        PresenceAffiliation.Member,
+                        PresenceRole.Participant,
+                        false,
+                        undefined,
+                        "unavailable",
+                        event.content.displayname || event.state_key,
+                    );
+                    rlPresence.statusCodes.add(XMPPStatusCode.SelfChangingNick);
+                    stanzas = sendToAllDevices(rlPresence, allDevices);
+                    return stanzas;
+                } else {
+                    // Do not handle if we already have them
+                    return [];
+                }
             }
             if (xmppMember) {
                 // Catch to avoid double bridging.

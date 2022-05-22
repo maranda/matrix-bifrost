@@ -75,6 +75,10 @@ export class GatewayHandler {
             log.debug(`Getting state for ${roomId}`);
             const state = await intent.roomState(roomId);
             log.debug(`Got state for ${roomId}`);
+            const encryptedEv = state.find((e) => e.type === "m.room.encrypted");
+            if (encryptedEv) {
+                throw Error("Bridging of encrypted rooms is not supported");
+            }
             const nameEv = state.find((e) => e.type === "m.room.name");
             const topicEv = state.find((e) => e.type === "m.room.topic");
             const historyVis = state.find((e) => e.type === "m.room.history_visibility");
@@ -149,6 +153,7 @@ export class GatewayHandler {
         if (!context.matrix) {
             return;
         }
+        let rename: boolean = false;
         const intent = this.bridge.getIntent();
         const room = await this.getVirtualRoom(context.matrix.getId(), intent);
         if (this.bridge.getBot().isRemoteUser(event.state_key)) {
@@ -160,8 +165,12 @@ export class GatewayHandler {
         const existingMembership = room.membership.find((ev) => ev.stateKey === event.state_key);
         if (existingMembership) {
             if (existingMembership.membership === event.content.membership) {
-                // No-op
-                return;
+                if (existingMembership.displayname !== event.content.displayname) {
+                    rename = true;
+                    this.purple.gateway.sendMatrixMembership(chatName, event, room, rename);
+                } else {
+                    return;
+                }
             }
             existingMembership.membership = event.content.membership;
             existingMembership.displayname = event.content.displayname;
@@ -257,6 +266,7 @@ export class GatewayHandler {
                 });
             }
             log.warn("Failed to join room:", ex.message);
+            this.roomIdCache.delete(roomId);
             await this.purple.gateway.onRemoteJoin(ex.message, data.join_id, undefined, undefined);
         }
     }
@@ -268,10 +278,12 @@ export class GatewayHandler {
             let roomAvatar: any;
             let roomDesc: any;
             let roomOccupants: number;
+            let historyVis: any;
             try {
                 const state = await this.bridge.getIntent().roomState(res.room_id) as WeakEvent[];
                 const roomEv = state.find((ev) => ev.type === "m.room.name");
                 const avatarEv = state.find((ev) => ev.type === "m.room.avatar");
+                historyVis = state.find((ev) => ev.type === "m.room.history_visibility");
                 roomOccupants = state.filter((ev) => (ev.type === "m.room.member" && ev.content.membership === "join")).length;
                 roomAvatar = avatarEv ? avatarEv.content.url : "";
                 roomDesc = roomEv ? roomEv.content.name : "";
@@ -280,6 +292,7 @@ export class GatewayHandler {
             }
             log.info(`Found ${res.room_id}`);
             ev.result(null, {
+                allowHistory: historyVis?.content?.history_visibility || 'joined',
                 roomId: res.room_id,
                 roomAvatar: roomAvatar,
                 roomDesc: roomDesc,

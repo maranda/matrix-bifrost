@@ -29,7 +29,7 @@
   "homepage": "https://github.com/matrix-org/matrix-bifrost",
   "dependencies": {
     "@xmpp/component": "^0.12.0",
-    "@xmpp/component-core": "^0.12.0",
+    "@xmpp/component-core": "maranda/aria-net-component-core",
     "@xmpp/jid": "^0.12.0",
     "@xmpp/reconnect": "^0.12.0",
     "@xmpp/xml": "^0.12.0",

@@ -1,7 +1,7 @@
 import { BifrostProtocol } from "./bifrost/Protocol";
 import { PRPL_S4B, PRPL_XMPP } from "./ProtoHacks";
 import { Parser } from "htmlparser2";
-import { Intent, Logging } from "matrix-appservice-bridge";
+import { Intent, Logging, WeakEvent } from "matrix-appservice-bridge";
 import { IConfigBridge } from "./Config";
 import request from "axios";
 import { IMatrixMsgContents, MatrixMessageEvent } from "./MatrixTypes";
@@ -11,7 +11,10 @@ export interface IBasicProtocolMessage {
     body: string;
     formatted?: {type: string, body: string}[];
     id?: string;
+    origin_id?: string;
+    stanza_id?: string;
     original_message?: string;
+    redacted?: {redact_id: string, moderation?: boolean, reason?: string};
     opts?: {
         attachments?: IMessageAttachment[];
     };
@@ -26,9 +29,18 @@ export interface IMessageAttachment {
 export class MessageFormatter {
 
     public static matrixEventToBody(event: MatrixMessageEvent, config: IConfigBridge): IBasicProtocolMessage {
+        const redacted = event.type === "m.room.redaction";
+        const formatted: { type: string, body: string }[] = [];
+        if (redacted) {
+            return {
+                body: "A retract was attempted, but it's unsupported by your client",
+                formatted,
+                id: event.event_id,
+                redacted: {redact_id: event.redacts, reason: event.content?.reason},
+            }
+        }
         let content = event.content;
         const originalMessage = event.content["m.relates_to"]?.event_id;
-        const formatted: {type: string, body: string}[] = [];
         if (event.content["m.relates_to"]?.rel_type === "m.replace" && event.content["m.new_content"]) {
             // This is an edit!
             content = event.content["m.new_content"];
@@ -40,7 +52,12 @@ export class MessageFormatter {
             });
         }
         if (content.msgtype === "m.emote") {
-            return {body: `/me ${content.body}`, formatted, id: event.event_id};
+            return {
+                body: `/me ${content.body}`,
+                formatted,
+                id: event.event_id,
+                original_message: originalMessage ? originalMessage : undefined,
+            };
         }
         if (["m.file", "m.image", "m.video"].includes(event.content.msgtype) && event.content.url) {
             const uriBits = event.content.url.substr("mxc://".length).split("/");
@@ -75,6 +92,12 @@ export class MessageFormatter {
         };
         if (msg.id) {
             matrixMsg.remote_id = msg.id;
+        }
+        if (msg.origin_id) {
+            matrixMsg.origin_id = msg.origin_id;
+        }
+        if (msg.stanza_id) {
+            matrixMsg.stanza_id = msg.stanza_id;
         }
         const hasAttachment = msg.opts && msg.opts.attachments && msg.opts.attachments.length;
         if ([PRPL_XMPP, PRPL_S4B].includes(protocol.id)) {

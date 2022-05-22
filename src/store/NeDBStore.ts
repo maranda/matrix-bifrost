@@ -150,8 +150,14 @@ export class NeDBStore implements IStore {
         return set;
     }
 
-    public getRoomsOfType(type: MROOM_TYPES): Promise<RoomBridgeStoreEntry[]> {
+    public async getRoomsOfType(type: MROOM_TYPES): Promise<RoomBridgeStoreEntry[]> {
         return this.roomStore.getEntriesByMatrixRoomData({type});
+    }
+
+    public async listLocalSenderNames(): Promise<Set<string>> {
+        // return an empty set
+        const senders = new Set<string>();
+        return senders;
     }
 
     public async storeAccount(userId: string, protocol: BifrostProtocol, username: string, extraData: any = {}) {

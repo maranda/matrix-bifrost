@@ -1,6 +1,6 @@
-import { Bridge, MatrixUser, Intent, Logging, WeakEvent, RoomBridgeStoreEntry} from "matrix-appservice-bridge";
+import { Bridge, MatrixUser, Intent, Logging, WeakEvent, RoomBridgeStoreEntry } from "matrix-appservice-bridge";
 import { IBifrostInstance } from "./bifrost/Instance";
-import { MROOM_TYPE_GROUP, MROOM_TYPE_IM, IRemoteGroupData, MUSER_TYPE_GHOST } from "./store/Types";
+import { MROOM_TYPE_GROUP, MROOM_TYPE_IM, IRemoteGroupData } from "./store/Types";
 import {
     IReceivedImMsg,
     IChatInvite,
@@ -13,6 +13,7 @@ import {
     IStoreRemoteUser,
     IChatReadReceipt,
     ICleanDoppleganger,
+    IFetchReceivedGroupMsg,
 } from "./bifrost/Events";
 import { ProfileSync } from "./ProfileSync";
 import { Util } from "./Util";
@@ -23,7 +24,6 @@ import { Config } from "./Config";
 import { decode as entityDecode } from "html-entities";
 import { MessageFormatter } from "./MessageFormatter";
 import request from "axios";
-import { BifrostProtocol } from "./bifrost/Protocol";
 const log = Logging.get("MatrixRoomHandler");
 
 const ACCOUNT_LOCK_MS = 1000;
@@ -35,8 +35,10 @@ const EVENT_MAPPING_SIZE = 16384;
 export class MatrixRoomHandler {
     private bridge?: Bridge;
     private accountRoomLock: Set<string>;
+    private alreadyKnownSenders: Set<string>;
     private remoteEventIdMapping: Map<string, string>; // remote_id -> event_id
     private roomCreationLock: Map<string, Promise<RoomBridgeStoreEntry>>;
+    private remoteEntriesCache: Map<IRemoteGroupData, any>;
     constructor(
         private purple: IBifrostInstance,
         private profileSync: ProfileSync,
@@ -45,7 +47,9 @@ export class MatrixRoomHandler {
         private deduplicator: Deduplicator,
     ) {
         this.accountRoomLock = new Set();
+        this.alreadyKnownSenders = new Set();
         this.roomCreationLock = new Map();
+        this.remoteEntriesCache = new Map();
         if (this.purple.needsDedupe() || this.purple.needsAccountLock()) {
             purple.on("chat-joined", this.onChatJoined.bind(this));
         }
@@ -93,10 +97,18 @@ export class MatrixRoomHandler {
                 storeUser.remoteId,
                 storeUser.data,
             );
+            if (!this.alreadyKnownSenders.has(storeUser.remoteId)) {
+                this.alreadyKnownSenders.add(storeUser.remoteId);
+            }
         });
         purple.on("clean-remote-doppleganger", this.handleDPCleaning.bind(this));
         this.remoteEventIdMapping = new Map();
         purple.on("read-receipt", this.handleReadReceipt.bind(this));
+        purple.on("remove-room-lock", (data: { roomId: string }) => {
+            log.info(`Called for creation lock deletion on ${data.roomId}, probably room was plumbed...`);
+            this.roomCreationLock.delete(data.roomId);
+        });
+        purple.on("initialize-instance", this.handleStartup.bind(this));
     }
 
     /**
@@ -182,12 +194,12 @@ export class MatrixRoomHandler {
                 await this.deduplicator.waitForJoin(result.matrix.getId(), matrixUser.getId());
                 log.info("User joined, can now send messages");
             }
+            this.roomCreationLock.delete(remoteId);
             return result.matrix.getId();
         } catch (ex) {
             log.error("Failed to create room", ex);
-            throw ex;
-        } finally {
             this.roomCreationLock.delete(remoteId);
+            throw ex;
         }
     }
 
@@ -282,12 +294,12 @@ export class MatrixRoomHandler {
         try {
             this.roomCreationLock.set(remoteId, createPromise);
             const result = await createPromise;
+            this.roomCreationLock.delete(remoteId);
             return result.matrix.getId();
         } catch (ex) {
             log.error("Failed to create room", ex);
-            throw ex;
-        } finally {
             this.roomCreationLock.delete(remoteId);
+            throw ex;
         }
     }
 
@@ -336,6 +348,24 @@ export class MatrixRoomHandler {
             log.warn("Not joined to room, discarding " + roomId);
             await this.store.removeRoomByRoomId(roomId);
             roomId = await this.createOrGetIMRoom(data, matrixUser, intent);
+        }
+
+        if (data.message.redacted) {
+            // do nothing
+            log.info(`Received retraction by ${data.sender} for ${data.message.redacted.redact_id}`);
+            try {
+                const isKnown = await intent.getEvent(roomId, data.message.redacted.redact_id, true).catch((ex) => {
+                    log.error("Failed to fetch original message for redaction:", ex);
+                }) as WeakEvent;
+                if (isKnown) {
+                    await intent.getClient().redactEvent(roomId, data.message.redacted.redact_id);
+                } else {
+                    throw Error(`Failed to redact, we don't know about ${data.message.redacted.redact_id}`);
+                }
+            } catch (e) {
+                log.error(`Failed to redact message for this IM: ${e}`);
+            }
+            return;
         }
 
         log.info(`Sending IM to ${roomId} as ${senderMatrixUser.getId()}`);
@@ -417,16 +447,41 @@ export class MatrixRoomHandler {
             log.error(`Failed to get/create room for this chat:`, e);
             return;
         }
+        if (data.message.redacted) {
+            // do nothing
+            log.info(`Received retraction by ${data.sender}, handling for ${data.message.redacted.redact_id} -> ${data.conv.name}`);
+            try {
+                const isKnown = await intent.getEvent(roomId, data.message.redacted.redact_id, true).catch((ex) => {
+                    log.error("Failed to fetch original message for redaction:", ex);
+                }) as WeakEvent;
+                if (isKnown?.sender === senderMatrixUser.userId) {
+                    await intent.getClient().redactEvent(roomId, data.message.redacted.redact_id);
+                } else {
+                    throw Error(`Failed to redact ${data.message.redacted.redact_id} -> ds:${senderMatrixUser.userId} ks:${isKnown?.sender}`);
+                }
+            } catch (e) {
+                log.error(`Failed to redact message for this Group: ${e}`);
+            }
+            return;
+        }
         if (data.message.original_message) {
             data.message.original_message = (
                 await this.store.getMatrixEventId(roomId, data.message.original_message)
             ) || undefined;
         }
         const content = await MessageFormatter.messageToMatrixEvent(data.message, protocol, intent);
-        const {event_id} = await intent.sendMessage(roomId, content) as {event_id: string};
+        const { event_id } = await intent.sendMessage(roomId, content).catch((ex) => {
+            log.error("Failed to send message:", ex);
+        }) as { event_id: string };
+        this.purple.emit("mam-add-entry", {
+            room_id: roomId,
+            event: await intent.getEvent(roomId, event_id, true).catch((ex) => {
+                log.error("Failed to fetch event to store into MAM:", ex);
+            }),
+        } as IFetchReceivedGroupMsg);
         if (data.message.id) {
-            await this.store.storeRoomEvent(roomId, event_id, data.message.id).catch((ev) => {
-                log.warn("Failed to store event mapping:", ev);
+            await this.store.storeRoomEvent(roomId, event_id, data.message.id).catch((ex) => {
+                log.warn("Failed to store event mapping:", ex);
             });
         }
     }
@@ -509,6 +564,9 @@ export class MatrixRoomHandler {
             (!remoteUser || remoteUser!.displayname);
         try {
             if (data.state === "joined") {
+                if (this.alreadyKnownSenders.has(data.sender)) {
+                    return;
+                }
                 if (!profileNeeded) {
                     await intent.join(roomId);
                 }
@@ -524,6 +582,7 @@ export class MatrixRoomHandler {
                 }
             } else if (data.state === "kick") {
                 await intent.kick(roomId, senderMatrixUser.getId(), data.reason || undefined);
+                this.alreadyKnownSenders.delete(data.sender);
             } else if (data.state === "left") {
                 if (this.config.tuning.limitStateChanges &&
                     (!data.gatewayAlias && !data.banner && (!data.kicker || (data.kicker && data.technical)))
@@ -532,6 +591,7 @@ export class MatrixRoomHandler {
                     return;
                 }
                 await intent.leave(roomId, data.reason || undefined);
+                this.alreadyKnownSenders.delete(data.sender);
             }
         } catch (ex) {
             log.warn("Failed to apply state change:", ex);
@@ -677,7 +737,13 @@ export class MatrixRoomHandler {
             protocol_id: data.protocol.id,
             room_name: data.roomName,
         };
-        const remoteEntry = await this.store.getGroupRoomByRemoteData(remoteData);
+        let remoteEntry: RoomBridgeStoreEntry;
+        if (this.remoteEntriesCache.has(remoteData)) {
+            remoteEntry = this.remoteEntriesCache.get(remoteData);
+        } else {
+            remoteEntry = await this.store.getGroupRoomByRemoteData(remoteData);
+            this.remoteEntriesCache.set(remoteData, remoteEntry);
+        }
         const intent = this.bridge.getIntent(senderMatrixUser.getId());
         try {
             intent.leave(remoteEntry.matrix?.getId(), "Doppleganger cleaned up").catch((err) => {
@@ -688,6 +754,16 @@ export class MatrixRoomHandler {
             log.debug(`Removing detected doppleganger ${data.sender} -> ${senderMatrixUser.getId()}`);
         } catch (ex) {
             log.warn(`Failed cleaning doppleganger: ${ex}`);
+        }
+    }
+
+    private async handleStartup(data: any) {
+        log.info("Initializing list of already known senders for startup sequence");
+        try {
+            this.alreadyKnownSenders = await this.store.listLocalSenderNames();
+        } catch (ex) {
+            log.warn("Initialization failed:", ex);
+            this.alreadyKnownSenders = new Set();
         }
     }
 }

@@ -49,14 +49,14 @@ export class ProtoHacks {
         if (protocolId === PRPL_XMPP || protocolId === XMPP_JS) {
             try {
                 if (typeof(intent) === "string") {
-                    props.handle = intent;
+                    props.handle = props.handle ? props.handle : intent;
                 } else {
                     if (!userId.match(/^@/)) {
                         // User doesn't have a mxId yet
                         return;
                     }
                     let profile = await intent.getProfileInfo(userId);
-                    props.handle = profile.displayname;
+                    props.handle = props.handle ? props.handle : profile.displayname;
                     if (protocolId === XMPP_JS) {
                         // fetch and compute avatar hash
                         if (profile.avatar_url) {

@@ -5,6 +5,7 @@ export enum XMPPStatusCode {
     RoomLoggingDisabled = "171",
     RoomNowNonAnonymous = "172",
     SelfBanned = "301",
+    SelfChangingNick = "303",
     SelfKicked = "307",
     SelfKickedShutdown = "332",
     SelfKickedTechnical = "333",
@@ -16,7 +17,13 @@ export enum XMPPFeatures {
     Muc = "http://jabber.org/protocol/muc",
     IqVersion = "jabber:iq:version",
     IqSearch = "jabber:iq:search",
+    MessageArchiveManagement = "urn:xmpp:mam:2",
     MessageCorrection = "urn:xmpp:message-correct:0",
+    MessageModeration = "urn:xmpp:message-moderate:0",
+    MessageRetraction = "urn:xmpp:message-retract:0",
+    StableStanzaIDs = "urn:xmpp:sid:0",
     XHTMLIM = "http://jabber.org/protocol/xhtml-im",
     vCard = "vcard-temp",
 }
+
+export const BridgeVersion = "0.4.0.arianet.3"

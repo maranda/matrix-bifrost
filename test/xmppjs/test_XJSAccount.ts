@@ -45,7 +45,6 @@ describe("XJSAccount", () => {
                 hId: "12345",
                 html: "",
                 body: "Hello!",
-                markable: true,
                 attachments: [],
             });
         });

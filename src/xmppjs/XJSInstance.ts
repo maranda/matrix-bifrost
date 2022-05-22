@@ -24,10 +24,11 @@ import { IBasicProtocolMessage, IMessageAttachment } from "../MessageFormatter";
 import { PresenceCache } from "./PresenceCache";
 import { Metrics } from "../Metrics";
 import { ServiceHandler } from "./ServiceHandler";
+import { MAMHandler } from "./MAM";
 import { XJSConnection } from "./XJSConnection";
 import { AutoRegistration } from "../AutoRegistration";
 import { XmppJsGateway } from "./XJSGateway";
-import { IStza, StzaBase, StzaIqDisco, StzaIqDiscoInfo, StzaIqPing, StzaIqPingError, StzaIqVcardRequest } from "./Stanzas";
+import { IStza, StzaBase, StzaIqDiscoInfo, StzaIqPing, StzaIqPingError, StzaIqVcardRequest, StzaMessage } from "./Stanzas";
 import { Util } from "../Util";
 import { v4 as uuid } from "uuid";
 
@@ -62,14 +63,19 @@ class XmppProtocol extends BifrostProtocol {
 
 export const XMPP_PROTOCOL = new XmppProtocol();
 const SEEN_MESSAGES_SIZE = 16384;
+const XMPP_URI_GLOBAL_MATCH = /xmpp:([\+a-zA-Z0-9.-\u00c0-\u024f\u1e00-\u1eff]+@)?[a-zA-Z0-9.-]+(\?join)?/g;
+const XMPP_URI_SUB_MATCH = /xmpp:((.+)@)?([a-zA-Z0-9.-]+)(\?join)?/;
 
 export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     public readonly presenceCache: PresenceCache;
     public serviceHandler: ServiceHandler;
+    public mamHandler?: MAMHandler;
     private xmpp?: any;
     private myAddress!: JID;
     private accounts: Map<string, XmppJsAccount>;
     private seenMessages: Set<string>;
+    private sentMessageStanzas: Map<string, StzaMessage>;
+    private resentMessageStanzas: Set<string>;
     private defaultRes!: string;
     private connectionWasDropped: boolean;
     private bufferedMessages: {xmlMsg: Element|string, resolve: (res: Promise<void>) => void}[];
@@ -84,6 +90,8 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         this.accounts = new Map();
         this.bufferedMessages = [];
         this.seenMessages = new Set();
+        this.sentMessageStanzas = new Map();
+        this.resentMessageStanzas = new Set();
         this.presenceCache = new PresenceCache();
         this.serviceHandler = new ServiceHandler(this, config.bridge);
         this.connectionWasDropped = false;
@@ -112,6 +120,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     public preStart(bridge: Bridge, autoRegister: AutoRegistration) {
         this.autoRegister = autoRegister;
         this.bridge = bridge;
+        this.mamHandler = new MAMHandler(this, this.bridge, this.config.bridge);
         if (!autoRegister) {
             throw Error('autoRegistration not defined, cannot start bridge');
         }
@@ -197,12 +206,19 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         return p;
     }
 
-    public xmppAddSentMessage(id: string) {
+    public xmppAddSentMessage(id: string, stanza?: StzaMessage) {
         this.seenMessages.add(id);
+        if (stanza) {
+            this.sentMessageStanzas.set(id, stanza);
+        }
         // Remove old entries
         if (this.seenMessages.size >= SEEN_MESSAGES_SIZE) {
             const arr = [...this.seenMessages].slice(0, 50);
-            arr.forEach(this.seenMessages.delete.bind(this.seenMessages));
+            arr.forEach((id) => {
+                this.resentMessageStanzas.delete(id);
+                this.sentMessageStanzas.delete(id);
+                this.seenMessages.delete(id);
+            });
         }
     }
 
@@ -213,6 +229,15 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             }
         }
         return;
+    }
+
+    public isDoppleganger(j: JID): boolean {
+        for (const acct of this.accounts.values()) {
+            if (acct.roomNicks.has(j.toString())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public getBuddyFromChat(conv: any, buddy: string): any {
@@ -304,6 +329,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         }
         await xmpp.start();
         this.xmpp = xmpp;
+        this.emit("initialize-instance", true);
     }
 
     public signInAccounts(mxidUsernames: {[mxid: string]: string}) {
@@ -444,6 +470,32 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         });
     }
 
+    private convertXMPPUris(body: string): string {
+        // attempt to convert XMPP URIs into matrix ones
+        const bodyMatches = body.match(XMPP_URI_GLOBAL_MATCH);
+        if (bodyMatches) {
+            for (const uri of bodyMatches) {
+                const portions = uri.match(XMPP_URI_SUB_MATCH);
+                if (portions.length === 5) {
+                    let mxId;
+                    if (portions[4]) { // it's a MUC
+                        mxId = portions[2] ?
+                            `#${this.config.bridge.userPrefix}${portions[2]}_${portions[3]}:${this.config.bridge.domain}` :
+                            `#${this.config.bridge.userPrefix}${portions[3]}:${this.config.bridge.domain}`;
+                    } else {
+                        mxId = portions[2] ?
+                            XMPP_PROTOCOL.getMxIdForProtocol(
+                                portions[2] + "=40" + portions[3], this.config.bridge.domain, this.config.bridge.userPrefix
+                            ).userId :
+                            `@${this.config.bridge.userPrefix}${portions[3]}:${this.config.bridge.domain}`;
+                    }
+                    body = body.replace(uri, `https://matrix.to/#/${mxId}`);
+                }
+            }
+        }
+        return body;
+    }
+
     private async getMucAvatar(room: string): Promise<Element> {
         const id = uuid();
         // check if MUC supports avatars
@@ -514,11 +566,17 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         return res;
     }
 
-    private generateIdforMsg(stanza: Element) {
-        const body = stanza.getChildText("body");
-
+    public generateIdforMsg(stanza: Element) {
+        const body = stanza.getChildText("body") || stanza.getChildText("subject");
         if (body) {
             return Buffer.from(`${stanza.getAttr("from")}${body}`).toString("base64");
+        }
+
+        // Hack: try to handle choppy XMPP clients that don't properly add id attributes on MUC gateway join presences
+        const x = stanza.getChild("x", "http://jabber.org/protocol/muc");
+        if (stanza.name === "presence" && x) {
+            const dT = new Date();
+            return Buffer.from(stanza.toString() + Math.floor(dT.getTime()/1000).toString()).toString("base64");
         }
 
         return Buffer.from(stanza.toString()).toString("base64");
@@ -526,10 +584,12 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
 
     private async onStanza(stanza: Element) {
         const startedAt = Date.now();
-        const id = stanza.attrs.id = stanza.attrs.id || this.generateIdforMsg(stanza);
-        if (this.seenMessages.has(id) && stanza.name === "message") {
+        const id = stanza.attrs.id || this.generateIdforMsg(stanza);
+        if (this.seenMessages.has(id) && stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
             return;
-        } else if (stanza.name === "message") {
+        }
+        if ((stanza.name === "message" || stanza.name === "presence") &&
+            stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
             this.xmppAddSentMessage(id);
         }
         log.debug("Stanza:", stanza.toJSON());
@@ -615,7 +675,6 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         }
     }
 
-
     private async handleMessageStanza(stanza: Element, alias: string|null) {
         if (!stanza.attrs.from || !stanza.attrs.to) {
             return;
@@ -632,6 +691,12 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 // and set the right to/from addresses.
                 convName = Util.prepJID(to);
                 log.info(`Sending gateway group message to ${convName}`);
+                // stamp our own stanza-id on the message
+                if (stanza.getChild("stanza-id", "urn:xmpp:sid:0")) {
+                    // remove spoofed stanza-id
+                    stanza.remove("stanza-id", "urn:xmpp:sid:0");
+                }
+                stanza.c("stanza-id", { xmlns: "urn:xmpp:sid:0", id: uuid(), by: convName, });
                 if (!(await this.gateway!.reflectXMPPMessage(convName, stanza))) {
                     log.warn(`Message could not be sent, not forwarding to Matrix`);
                     return;
@@ -682,12 +747,17 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             // We got an error back from sending a message, let's handle it.
             const error = stanza.getChild("error")!;
             log.warn(`Message ${stanza.attrs.id} returned an error: `, error.toString());
-            if (error.attrs.code === "406" && error.getChild("not-acceptable") && localAcct) {
-                log.warn("Got 406/not-acceptable, rejoining room..");
+            if (error.getChild("not-acceptable") && localAcct) {
+                log.warn("Got not-acceptable, rejoining room..");
                 // https://xmpp.org/extensions/xep-0045.html#message says we
                 // should treat this as the user not being joined.
                 await localAcct.rejoinChat(convName);
-                // TODO: Resend the message?
+                // Resend the message
+                const xMsg = this.sentMessageStanzas.get(stanza.attrs.id);
+                if (xMsg && !this.resentMessageStanzas.has(stanza.attrs.id)) {
+                    this.resentMessageStanzas.add(stanza.attrs.id);
+                    this.xmppSend(xMsg);
+                }
             }
         }
         const type = stanza.attrs.type;
@@ -822,6 +892,9 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         convName: string, forceMucPM: boolean) {
         const body = stanza.getChildText("body");
         const replace = stanza.getChildByAttr("xmlns", "urn:xmpp:message-correct:0");
+        const retract = stanza.getChildByAttr("xmlns", "urn:xmpp:fasten:0");
+        const origin_id = stanza.getChild("origin-id", "urn:xmpp:sid:0");
+        const stanza_id = stanza.getChild("stanza-id", "urn:xmpp:sid:0");
         const type = stanza.attrs.type;
         const attachments: IMessageAttachment[] = [];
         // https://xmpp.org/extensions/xep-0066.html#x-oob
@@ -836,10 +909,14 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         }
 
         const message = {
-            body,
-            formatted: [ ],
+            body: this.convertXMPPUris(body),
+            formatted: [],
             id: stanza.attrs.id,
+            origin_id: origin_id ? origin_id.getAttr("id") : undefined,
+            stanza_id: stanza_id ? stanza_id.getAttr("id") : undefined,
             original_message: replace ? replace.getAttr("id") : undefined,
+            redacted: retract?.getChildByAttr("xmlns", "urn:xmpp:message-retract:0") ?
+                { redact_id: retract.getAttr("id") } : undefined,
             opts: {
                 attachments,
             },
@@ -850,7 +927,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             html = html.getChild("body") || html;
             message.formatted!.push({
                 type: "html",
-                body: html.toString(),
+                body: this.convertXMPPUris(html.toString()),
             });
         }
 
@@ -1018,17 +1095,13 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 } as IChatJoined);
                 return;
             }
-            let negate = false;
-            for (const acct of this.accounts.values()) {
-                if (acct.roomNicks.has(from.toString())) {
-                    negate = true;
-                    break;
-                }
+            if (this.isDoppleganger(from)) {
+                // this is a doppleganger of our don't handle it
+                return;
             }
             if (delta.status && !delta.status.ours) {
-                if (this.isWaitingToJoin(to) === from.toString() || negate) {
-                    // An account is waiting to join this room, 
-                    // or we're handling a local ghost so hold off on the join
+                if (this.isWaitingToJoin(to) === from.toString()) {
+                    // An account is waiting to join this room
                     return;
                 }
                 this.emit("chat-user-joined", {

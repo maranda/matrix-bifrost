@@ -4,13 +4,12 @@ import parse from "@xmpp/xml/lib/parse";
 import { jid, JID } from "@xmpp/jid";
 import { Bridge, Logging } from "matrix-appservice-bridge";
 import { IConfigBridge } from "../Config";
-import { IBasicProtocolMessage } from "..//MessageFormatter";
+import { IBasicProtocolMessage } from "../MessageFormatter";
 import {
     IGatewayJoin,
     IUserStateChanged,
     IStoreRemoteUser,
-    IUserInfo,
-    IReceivedImMsg
+    IUserInfo
 } from "../bifrost/Events";
 import { IGatewayRoom } from "../bifrost/Gateway";
 import { PresenceCache } from "./PresenceCache";
@@ -27,7 +26,6 @@ import { MatrixMembershipEvent } from "../MatrixTypes";
 import { IHistoryLimits, HistoryManager, MemoryStorage } from "./HistoryManager";
 import { Util } from "../Util";
 import { ProtoHacks } from "../ProtoHacks";
-import { ServiceHandler } from "./ServiceHandler";
 
 const log = Logging.get("XmppJsGateway");
 
@@ -70,19 +68,27 @@ export class XmppJsGateway implements IGateway {
         const isMucType = stanza.getChildByAttr("xmlns", "http://jabber.org/protocol/muc");
         log.info(`Handling ${stanza.name} from=${stanza.attrs.from} to=${stanza.attrs.to} for ${gatewayAlias}`);
         if ((delta.changed.includes("online") || delta.changed.includes("newdevice")) && isMucType) {
-            this.addStanzaToCache(stanza);
+            const id = stanza.attrs.id || this.xmpp.generateIdforMsg(stanza);
+            this.addStanzaToCache(stanza, id);
             // Gateways are special.
             // We also want to drop the resource from the sender.
-            const from = jid(stanza.attrs.from);
-            const sender = Util.prepJID(from);
+            const sender = Util.prepJID(jid(stanza.attrs.from));
             this.xmpp.emit("gateway-joinroom", {
-                join_id: stanza.attrs.id,
+                join_id: id,
                 roomAlias: gatewayAlias,
                 sender,
                 nick: to.resource,
                 protocol_id: XMPP_PROTOCOL.id,
                 room_name: convName,
             } as IGatewayJoin);
+        } else if (delta.changed.includes("online") && !isMucType) {
+            // Bounce nick changes from Gateway
+            this.xmpp.xmppSend(
+                new StzaPresenceError(
+                    stanza.attrs.to, stanza.attrs.from, stanza.attrs.id,
+                    gatewayAlias, "cancel", "not-acceptable", "Nick changes are not allowed Gateway side, please part and rejoin the room",
+                )                
+            );
         } else if (delta.changed.includes("offline")) {
             const wasBanned = delta.status!.ban;
             let banner: string|boolean|undefined;
@@ -138,9 +144,13 @@ export class XmppJsGateway implements IGateway {
         }
     }
 
-    public addStanzaToCache(stanza: Element) {
-        this.stanzaCache.set(stanza.attrs.id, stanza);
-        log.debug("Added cached stanza for " + stanza.attrs.id);
+    public addStanzaToCache(stanza: Element, id: string) {
+        this.stanzaCache.set(id, stanza);
+        log.debug("Added cached stanza for " + id);
+    }
+
+    public getMembersInRoom(chatName: string) {
+        return this.members.getMembers(chatName);
     }
 
     public memberInRoom(chatName: string, matrixId: string) {
@@ -187,24 +197,30 @@ export class XmppJsGateway implements IGateway {
                 }
             });
         }
-        const msgs = [...this.members.getXmppMembersDevices(chatName)].map((device) =>
-            new StzaMessage(
-                from.anonymousJid.toString(),
+        const msgs = [...this.members.getXmppMembersDevices(chatName)].map((device) => {
+            const stanza = new StzaMessage(
+                msg.redacted?.moderation ? chatName : from.anonymousJid.toString(),
                 device,
                 msg,
                 "groupchat",
-            )
-        );
+            );
+            if (!msg.redacted) {
+                stanza.stanzaId = msg.id
+            }
+            return stanza;
+        });
 
         // add the message to the room history
         const historyStanza = new StzaMessage(
-            from.anonymousJid.toString(),
+            msg.redacted?.moderation ? chatName : from.anonymousJid.toString(),
             "",
             msg,
             "groupchat",
         );
+        historyStanza.stanzaId = !msg.redacted ? msg.id : undefined;
         if (room.allowHistory) {
-            this.roomHistory.addMessage(chatName, parse(historyStanza.xml), from.anonymousJid);
+            this.roomHistory.addMessage(chatName, parse(historyStanza.xml),
+                msg.redacted?.moderation ? from.anonymousJid.bare() : from.anonymousJid);
         }
 
         return this.xmpp.xmppSendBulk(msgs);
@@ -290,11 +306,11 @@ export class XmppJsGateway implements IGateway {
     }
 
     public async sendMatrixMembership(
-        chatName: string, event: MatrixMembershipEvent, room: IGatewayRoom
+        chatName: string, event: MatrixMembershipEvent, room: IGatewayRoom, rename: boolean = false
     ) {
         log.info(`Got new ${event.content.membership} for ${event.state_key} (from: ${event.sender}) in ${chatName}`);
         // Iterate around each joined member and add the new presence step.
-        const presenceEvents = GatewayStateResolve.resolveMatrixStateToXMPP(chatName, this.members, event, room);
+        const presenceEvents = GatewayStateResolve.resolveMatrixStateToXMPP(chatName, this.members, event, room, rename);
         if (presenceEvents.length === 0) {
             log.info(`Nothing to do for ${event.event_id}`);
             return;
@@ -668,7 +684,7 @@ export class XmppJsGateway implements IGateway {
     }
 
     private updateMatrixMemberListForRoom(chatName: string, room: IGatewayRoom, allowForJoin = false) {
-        if (!allowForJoin && this.members.getMatrixMembers(chatName)) {
+        if (!allowForJoin && this.members.getMatrixMembers(chatName).length !== 0) {
             return;
         }
         let joined = 0;

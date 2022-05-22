@@ -13,7 +13,7 @@ import { v4 as uuid } from "uuid";
 import { XHTMLIM } from "./XHTMLIM";
 import { StzaMessage, StzaIqPing, StzaPresenceJoin, StzaPresencePart, StzaIqVcardRequest } from "./Stanzas";
 
-const IDPREFIX = "pbridge";
+const IDPREFIX = "bifrost";
 const CONFLICT_SUFFIX = "[m]";
 const LASTSTANZA_CHECK_MS = 2 * 60000;
 const LASTSTANZA_MAXDURATION = 10 * 60000;
@@ -40,6 +40,7 @@ export class XmppJsAccount implements IBifrostAccount {
     public readonly roomNicks: Set<string>;
     private readonly pmSessions: Set<string>;
     private avatarHash?: string;
+    private cleanedDG: number;
     private lastStanzaTs: Map<string, number>;
     private checkInterval: NodeJS.Timeout;
     constructor(
@@ -52,6 +53,7 @@ export class XmppJsAccount implements IBifrostAccount {
         this.roomNicks = new Set();
         this.waitingToJoin = new Set();
         this.pmSessions = new Set();
+        this.cleanedDG = 0;
         this.lastStanzaTs = new Map();
         this.checkInterval = setInterval(() => {
             this.lastStanzaTs.forEach((ts, roomName) => {
@@ -62,15 +64,25 @@ export class XmppJsAccount implements IBifrostAccount {
                             return;
                         }
                         // make really sure the handle is not null
+                        let handle: string;
                         if (!this.roomHandles.has(roomName)) {
                             log.warn(`${this.remoteId} has no handler for ${roomName}`);
-                            return;
+                            const handleRegex = /^(.*)\/(.*)$/;
+                            for (const roomNick of this.roomNicks.values()) {
+                                const match = roomNick.match(handleRegex);
+                                if (match && match[1] === roomName) {
+                                    handle = match[2];
+                                }
+                                break;
+                            }
                         }
-                        this.joinChat({
-                            fullRoomName: roomName,
-                            handle: this.roomHandles.get(roomName)!,
-                            avatar_hash: this.avatarHash,
-                        });
+                        if (this.roomHandles.get(roomName) || handle) {
+                            this.joinChat({
+                                fullRoomName: roomName,
+                                handle: this.roomHandles.get(roomName) || handle,
+                                avatar_hash: this.avatarHash,
+                            });
+                        }
                     });
                 }
             });
@@ -130,7 +142,7 @@ export class XmppJsAccount implements IBifrostAccount {
             // Send RR for message if we have the matrixId.
             this.xmpp.emitReadReciepts(msg.id, chatName, true);
         }
-        this.xmpp.xmppAddSentMessage(id);
+        this.xmpp.xmppAddSentMessage(id, xMsg);
         this.xmpp.xmppSend(xMsg);
         Metrics.remoteCall("xmpp.message.groupchat");
     }
@@ -204,6 +216,10 @@ export class XmppJsAccount implements IBifrostAccount {
             if (!handle) {
                 throw new Error("User has no assigned handle for this room, we cannot rejoin!");
             }
+            // we need to clean handles before attempting to rejoin
+            this.cleanedDG = 0;
+            this.roomHandles.delete(fullRoomName);
+            this.roomNicks.delete(`${fullRoomName}/${handle}`);
             await this.joinChat({
                 handle: handle,
                 fullRoomName: fullRoomName,
@@ -231,32 +247,38 @@ export class XmppJsAccount implements IBifrostAccount {
         const from = `${this.remoteId}/${this.resource}`;
         log.debug(`joinChat:`, this.remoteId, components);
         if (this.isInRoom(roomName)) {
-            log.debug(`Didn't join ${to} from ${from}, already joined`);
-            this.xmpp.emit("clean-remote-doppleganger", {
-                sender: to,
-                protocol: this.xmpp.getProtocol(XMPP_PROTOCOL.id),
-                roomName,
-            } as ICleanDoppleganger);
-            return {
-                eventName: "already-joined",
-                account: {
-                    username: this.remoteId,
-                    protocol_id: XMPP_PROTOCOL.id,
-                } as IAccountMinimal,
-                conv: {
-                    name: roomName,
-                },
-            };
+            const currentHandle = this.roomHandles.get(roomName);
+            if (currentHandle !== components.handle) {
+                log.debug(`Leaving ${to} with old puppet ${currentHandle}`);
+                this.cleanedDG = 0;
+                this.cleanDG(to, roomName);
+                await this.rejectChat(
+                    {
+                        fullRoomName: components.fullRoomName,
+                        room: components.room,
+                        server: components.server,
+                    } as IChatJoinProperties
+                );
+            } else {
+                log.debug(`Didn't join ${to} from ${from}, already joined`);
+                this.cleanDG(to, roomName);
+                return {
+                    eventName: "already-joined",
+                    account: {
+                        username: this.remoteId,
+                        protocol_id: XMPP_PROTOCOL.id,
+                    } as IAccountMinimal,
+                    conv: {
+                        name: roomName,
+                    },
+                };
+            }
         }
         if (await this.selfPing(to)) {
             log.info(`Didn't join ${to} from ${from}, self ping says we are joined`);
             this.roomHandles.set(roomName, components.handle);
             this.roomNicks.add(to);
-            this.xmpp.emit("clean-remote-doppleganger", {
-                sender: to,
-                protocol: this.xmpp.getProtocol(XMPP_PROTOCOL.id),
-                roomName,
-            } as ICleanDoppleganger);
+            this.cleanDG(to, roomName);
             return {
                 eventName: "already-joined",
                 account: {
@@ -290,11 +312,7 @@ export class XmppJsAccount implements IBifrostAccount {
                     if (data.conv.name === roomName) {
                         this.waitingToJoin.delete(roomName);
                         log.info(`Got ack for join ${roomName}`);
-                        this.xmpp.emit("clean-remote-doppleganger", {
-                            sender: to,
-                            protocol: this.xmpp.getProtocol(XMPP_PROTOCOL.id),
-                            roomName,
-                        } as ICleanDoppleganger);
+                        this.cleanDG(to, roomName);
                         clearTimeout(timer);
                         this.xmpp.removeListener("chat-joined", cb);
                         resolve(data);
@@ -330,7 +348,7 @@ export class XmppJsAccount implements IBifrostAccount {
 
     public async rejectChat(components: IChatJoinProperties) {
         /** This also handles leaving */
-        const room = `${components.room}@${components.server}`;
+        const room = components.fullRoomName || `${components.room}@${components.server}`;
         components.handle = this.roomHandles.get(room)!;
         log.info(`${this.remoteId} (${components.handle}) is leaving ${room}`);
 
@@ -410,5 +428,17 @@ export class XmppJsAccount implements IBifrostAccount {
     public sendIMTyping() {
         // No-op
         return;
+    }
+
+    private cleanDG(to: string, roomName: string) {
+        if (this.cleanedDG >= 10) {
+            return;
+        }
+        this.xmpp.emit("clean-remote-doppleganger", {
+            sender: to,
+            protocol: this.xmpp.getProtocol(XMPP_PROTOCOL.id),
+            roomName,
+        } as ICleanDoppleganger);
+        this.cleanedDG++;
     }
 }

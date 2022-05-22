@@ -559,6 +559,14 @@
     "@xmpp/jid" "^0.12.0"
     "@xmpp/xml" "^0.12.0"
 
+"@xmpp/component-core@maranda/aria-net-component-core":
+  version "0.12.0"
+  resolved "https://codeload.github.com/maranda/aria-net-component-core/tar.gz/7d208d3a2df67bf90efad3c6b60911f37a2fda37"
+  dependencies:
+    "@xmpp/connection-tcp" "^0.12.0"
+    "@xmpp/jid" "^0.12.0"
+    "@xmpp/xml" "^0.12.0"
+
 "@xmpp/component@^0.12.0":
   version "0.12.0"
   resolved "https://registry.yarnpkg.com/@xmpp/component/-/component-0.12.0.tgz#71135d32510e1a7f4b413b57d13a17bbcd3cf02d"
