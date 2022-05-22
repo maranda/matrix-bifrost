@@ -404,7 +404,7 @@ export class StzaMessageMAM extends StzaBase {
             );
         }
         this.entryStza = new StzaMessage(entry.from, undefined, entry.payload, "groupchat");
-        this.entryId = entry.payload?.id;
+        this.entryId = entry.stanzaId || entry.payload?.id;
         this.entryStza.addNS = "jabber:client"; // add NS to forwarded stanza
         this.entryStza.originId = entry.originId;
         this.entryStza.id = entry.originId ? entry.originId : this.entryStza.id;
