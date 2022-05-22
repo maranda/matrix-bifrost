@@ -561,7 +561,10 @@ export class MatrixRoomHandler {
             this.config.bridge.userPrefix,
         ) : senderMatrixUser;
         const intent = this.bridge.getIntent(intentUser.userId);
-        const roomId = await this.createOrGetGroupChatRoom(data, intent, true);
+        const roomId = await this.createOrGetGroupChatRoom(data, intent, true).catch((ex) => {
+            log.error(`Didn't handle join for ${data.sender} -> ${ex}`);
+            return;
+        });
         const account = this.purple.getAccount(data.account.username, data.account.protocol_id);
         // Do we need to set a profile before we can join to avoid uglyness?
         const profileNeeded = this.config.tuning.waitOnProfileBeforeSend &&
