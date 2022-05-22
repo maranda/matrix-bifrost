@@ -56,10 +56,11 @@ export interface IStore {
     : Promise<RoomBridgeStoreEntry>;
 
     getMatrixEventId(roomId: string, remoteEventId: string): Promise<string|null>;
+    getRemoteEventId(roomId: string, matrixEventId: string): Promise<string | null>;
+    getOriginIdFromEvent(roomId: string, matrixEventId: string): Promise<string | null>;
+    getStanzaIdFromEvent(roomId: string, matrixEventId: string): Promise<string | null>;
 
-    getRemoteEventId(roomId: string, matrixEventId: string): Promise<string|null>;
-
-    storeRoomEvent(roomId: string, matrixEventId: string, remoteEventId: string): Promise<void>;
+    storeRoomEvent(roomId: string, matrixEventId: string, remoteEventId: string, remoteOriginId?: string, remoteStanzaId?: string): Promise<void>;
 
     integrityCheck(canWrite: boolean): Promise<void>;
 }
