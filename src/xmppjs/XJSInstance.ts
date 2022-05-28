@@ -219,7 +219,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
 
     public xmppSeenStanza(stanza: Element): boolean {
         let id: string = stanza.attrs.id ? stanza.attrs.id : this.generateIdforMsg(stanza);
-        if (stanza.attrs.type === "message") {
+        if (stanza.attrs.type === "message" && !this.sentMessageStanzas.has(id)) {
             id = Buffer.from(`${id}${stanza.getChildText("body")}`).toString("base64");
         }
         return this.seenMessages.has(id);
@@ -235,9 +235,8 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     }
 
     public xmppAddSentMessage(stanza: StzaMessage) {
-        const hash = Buffer.from(`${stanza.id}${stanza.body}`).toString("base64");
-        this.seenMessages.add(hash);
-        this.sentMessageStanzas.set(hash, stanza);
+        this.seenMessages.add(stanza.id);
+        this.sentMessageStanzas.set(stanza.id, stanza);
         this.cleanSeenMessages();
     }
 
