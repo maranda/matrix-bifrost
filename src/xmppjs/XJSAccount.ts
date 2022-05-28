@@ -124,7 +124,7 @@ export class XmppJsAccount implements IBifrostAccount {
         if (!this.pmSessions.has(recipient)) {
             this.pmSessions.add(recipient);
         }
-        this.xmpp.xmppAddSentMessage(msg.id);
+        this.xmpp.xmppAddSentMessage(message);
         this.xmpp.xmppSend(message);
         Metrics.remoteCall("xmpp.message.chat");
     }
@@ -142,7 +142,7 @@ export class XmppJsAccount implements IBifrostAccount {
             // Send RR for message if we have the matrixId.
             this.xmpp.emitReadReciepts(msg.id, chatName, true);
         }
-        this.xmpp.xmppAddSentMessage(id, xMsg);
+        this.xmpp.xmppAddSentMessage(xMsg);
         this.xmpp.xmppSend(xMsg);
         Metrics.remoteCall("xmpp.message.groupchat");
     }

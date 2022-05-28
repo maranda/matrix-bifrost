@@ -206,12 +206,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         return p;
     }
 
-    public xmppAddSentMessage(id: string, stanza?: StzaMessage) {
-        this.seenMessages.add(id);
-        if (stanza) {
-            this.sentMessageStanzas.set(id, stanza);
-        }
-        // Remove old entries
+    private cleanSeenMessages() {
         if (this.seenMessages.size >= SEEN_MESSAGES_SIZE) {
             const arr = [...this.seenMessages].slice(0, 50);
             arr.forEach((id) => {
@@ -220,6 +215,30 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 this.seenMessages.delete(id);
             });
         }
+    }
+
+    public xmppSeenStanza(stanza: Element): boolean {
+        let id: string = stanza.attrs.id ? stanza.attrs.id : this.generateIdforMsg(stanza);
+        if (stanza.attrs.type === "message") {
+            id = Buffer.from(`${id}${stanza.getChildText("body")}`).toString("base64");
+        }
+        return this.seenMessages.has(id);
+    }
+
+    public xmppAddStanza(stanza: Element) {
+        let id: string = stanza.attrs.id ? stanza.attrs.id : this.generateIdforMsg(stanza);
+        if (stanza.attrs.type === "message") {
+            id = Buffer.from(`${id}${stanza.getChildText("body")}`).toString("base64");
+        }
+        this.seenMessages.add(id);
+        this.cleanSeenMessages();
+    }
+
+    public xmppAddSentMessage(stanza: StzaMessage) {
+        const hash = Buffer.from(`${stanza.id}${stanza.body}`).toString("base64");
+        this.seenMessages.add(hash);
+        this.sentMessageStanzas.set(hash, stanza);
+        this.cleanSeenMessages();
     }
 
     public isWaitingToJoin(j: JID): string|undefined {
@@ -584,13 +603,12 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
 
     private async onStanza(stanza: Element) {
         const startedAt = Date.now();
-        const id = stanza.attrs.id || this.generateIdforMsg(stanza);
-        if (this.seenMessages.has(id) && stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
+        if (this.xmppSeenStanza(stanza) && stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
             return;
         }
         if ((stanza.name === "message" || stanza.name === "presence") &&
             stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
-            this.xmppAddSentMessage(id);
+            this.xmppAddStanza(stanza);
         }
         log.debug("Stanza:", stanza.toJSON());
         const from = stanza.attrs.from ? jid(stanza.attrs.from) : null;
@@ -623,7 +641,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             } else if (stanza.is("iq") &&
                 ["result", "error"].includes(stanza.getAttr("type")) &&
                 stanza.attrs.id) {
-                this.emit("iq." + id, stanza);
+                this.emit("iq." + stanza.attrs.id, stanza);
             } else if (stanza.is("iq") && stanza.getAttr("type") === "get" && isOurs) {
                 this.serviceHandler.handleIq(stanza, this.bridge.getIntent());
             }

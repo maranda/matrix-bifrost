@@ -187,7 +187,7 @@ export class XmppJsGateway implements IGateway {
             log.error(`Cannot send ${msg.id}: No member cached.`);
             return;
         }
-        this.xmpp.xmppAddSentMessage(msg.id!);
+        let msgIdAdded: boolean;
 
         // Ensure that the html portion is XHTMLIM
         if (msg.formatted) {
@@ -206,6 +206,10 @@ export class XmppJsGateway implements IGateway {
             );
             if (!msg.redacted) {
                 stanza.stanzaId = msg.id
+            }
+            if (!msgIdAdded) {
+                msgIdAdded = true;
+                this.xmpp.xmppAddSentMessage(stanza);
             }
             return stanza;
         });
