@@ -1,18 +1,12 @@
 # matrix-bifröst
 
-[![Build status](https://badge.buildkite.com/36e28cac6177e2faad18f63099e5422b4a839d525560e38ed0.svg)](https://buildkite.com/matrix-dot-org/matrix-bifrost)[![#bifrost:half-shot.uk](https://img.shields.io/matrix/bifrost:half-shot.uk?server_fqdn=matrix.half-shot.uk&label=%23bifrost:half-shot.uk&logo=matrix)](https://matrix.to/#/#bifrost:half-shot.uk)
+General purpose puppeting bridges using XMPP-JS and possibly other backends.
 
-General purpose puppeting bridges using libpurple and other backends.
+This is a fork of the [Matrix Bifröst](https://github.com/matrix-org/matrix-bifrost) bridge used on [Aria Network](https://aria-net.org), it's currently in very active development as opposed to the upstream version.
 
-This bridge is in very active development currently and intended mainly for experimentation and evaluation purposes.
+## Service support
 
-This has been tested to work on `Node.JS v10` and `Synapse 0.34.0`.
-
-## Helping out
-
-If you wish to file an issue or create a PR, **please read [CONTRIBUTING.md](./CONTRIBUTING.md) first.
-
-**NOTE: You must read this README carefully as simply installing required dependencies may NOT be enough for some backends**
+You can get support for the Aria Network bridge instance in [#bifrost:aria-net.org](https://matrix.to/#/#bifrost:aria-net.org)
 
 ## Backends
 
