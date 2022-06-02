@@ -27,8 +27,9 @@ export interface IPresenceStatus {
     role: string;
     ours: boolean;
     // For gateways only
-    devices: Set<string>|undefined;
-    photoId: string|undefined;
+    devices: Set<string> | undefined;
+    nick: string | undefined;
+    photoId: string | undefined;
 }
 
 /**
@@ -83,10 +84,12 @@ export class PresenceCache {
         }
         const type = stanza.getAttr("type")!;
         // If it's a gateway, we want to invert this.
-        const from = jid.parse( this.isGateway ? stanza.attrs.to : stanza.attrs.from);
+        const from = jid.parse(this.isGateway ? stanza.attrs.to : stanza.attrs.from);
+        let nick: string|null = null;
         let device: string|null = null;
         if (this.isGateway) {
             device = jid.parse(stanza.attrs.from).resource;
+            nick = jid.parse(stanza.attrs.to).resource;
         }
 
         if (!from.resource) {
@@ -107,6 +110,7 @@ export class PresenceCache {
             online: false,
             ours: false,
             devices: this.isGateway ? new Set() : undefined,
+            nick: this.isGateway ? nick : undefined,
         } as IPresenceStatus;
         const delta: IPresenceDelta = {changed: [], isSelf, error: null, errorMsg: null};
 
@@ -117,6 +121,8 @@ export class PresenceCache {
 
         if (newUser) {
             delta.changed.push("new");
+        } else if (!newUser && nick && currentPresence.nick !== nick) {
+            delta.changed.push("newnick");
         }
 
         if (isSelf) {

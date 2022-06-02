@@ -81,7 +81,7 @@ export class XmppJsGateway implements IGateway {
                 protocol_id: XMPP_PROTOCOL.id,
                 room_name: convName,
             } as IGatewayJoin);
-        } else if (delta.changed.includes("online") && !isMucType) {
+        } else if (delta.changed.includes("newnick") && !isMucType) {
             // Bounce nick changes from Gateway
             this.xmpp.xmppSend(
                 new StzaPresenceError(
