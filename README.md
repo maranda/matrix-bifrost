@@ -14,10 +14,6 @@ This bridge features multiple backends for spinning up bridges on different type
 The following are supported:
 * `xmpp.js`
     Designed to bridge to XMPP networks directly, without purple. Good for setups requiring an extremely scalable XMPP bridge. Uses XMPP components.
-* `node-purple`
-    Uses libpurple to bridge to a number of networks supported by libpurple2. Good for simple bridges for a small number of users, or for bridging to less available protocols.
-    `node-purple` is an optional dependency, which is installed by default. We currently don't publish prebuilt packages for it, so you will need to install buildtime dependencies
-    listed [on the README](https://github.com/matrix-org/node-purple).
 
 ## Docker
 
@@ -39,7 +35,7 @@ An image is available on [Dockerhub](https://hub.docker.com/r/matrixdotorg/matri
 
 ### Dependencies
 
-Simply run `yarn install` as normal. Dependencies for `node-purple` can in it's [README](https://github.com/matrix-org/node-purple#node-purple)
+Simply run `yarn install` as normal.
 
 ### Installing & Configuring
 
@@ -93,24 +89,3 @@ If you are not using the `node-purple` backend, you can just start the service w
 ```shell
 yarn start -- -p 9555
 ```
-
-## Help
-
-### Binding purple accounts to a Matrix User
-
-The bridge won't do much unless it has accounts to bind. Due to the infancy of the bridge, we still use `~/.purple/accounts.xml`
-for the location of all the accounts. Our advice is to create the accounts you want to use on your local machine with Pidgin, and
-then copy the `accounts.xml` file to the bridge (where you should be copying the file to `/$BRIDGE_USER/.purple/accounts.xml`).
-
-Once you have started the bridge, you can instruct it to bind by starting a conversation with the bridge user and
-sending `accounts add-existing $PROTOCOL $USERNAME` where the protocol and username are given in the `accounts.xml` file.
-
-You should also run `accounts enable $PROTOCOL $USERNAME` to enable the account for the bridge, and then it should connect automatically.
-
-### My bridge crashed with a segfault
-
-The `node-purple` rewrite is still not quite bugfree and we are working hard to iron out the kinks in it. We ask that you report
-if certain purple plugins cause more crashes, or if anything in particular lead up to it.
-## Testing
-
-Running the tests is as simple as doing `yarn test`
