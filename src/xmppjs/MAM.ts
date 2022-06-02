@@ -39,6 +39,7 @@ export interface IBifrostMAMEntry {
     payload: IBasicProtocolMessage;
     originId?: string;
     remoteId?: string;
+    stanzaId?: string;
 }
 
 export interface IBifrostMAMResultSet {
@@ -276,6 +277,7 @@ export class MAMHandler {
                 payload: MessageFormatter.matrixEventToBody(ev as MatrixMessageEvent, this.config),
                 originId: ev.content?.origin_id as string,
                 remoteId: ev.content?.remote_id as string,
+                stanzaId: ev.content?.stanza_id as string,
             });
             lst = ev.event_id;
             count++;

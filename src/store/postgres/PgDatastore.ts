@@ -45,7 +45,7 @@ const TableToRoomType = {
 };
 
 export class PgDataStore implements IStore {
-    public static LATEST_SCHEMA = 3;
+    public static LATEST_SCHEMA = 4;
 
     private static BuildUpsertStatement(table: string, constraint: string, keyNames: string[]): string {
         const keys = keyNames.join(", ");
@@ -478,8 +478,30 @@ export class PgDataStore implements IStore {
         return null;
     }
 
-    public async storeRoomEvent(roomId: string, matrixEventId: string, remoteEventId: string) {
-        await this.pgPool.query("INSERT INTO events VALUES ($1, $2, $3)", [roomId, matrixEventId, remoteEventId]);
+    public async getOriginIdFromEvent(roomId: string, matrixEventId: string) {
+        const ev = await this.pgPool.query(
+            "SELECT origin_id FROM events WHERE room_id = $1 AND matrix_id = $2", [roomId, matrixEventId],
+        );
+        if (ev.rowCount) {
+            return ev.rows[0].origin_id;
+        }
+        return null;
+    }
+
+    public async getStanzaIdFromEvent(roomId: string, matrixEventId: string) {
+        const ev = await this.pgPool.query(
+            "SELECT stanza_id FROM events WHERE room_id = $1 AND matrix_id = $2", [roomId, matrixEventId],
+        );
+        if (ev.rowCount) {
+            return ev.rows[0].stanza_id;
+        }
+        return null;
+    }
+
+    public async storeRoomEvent(
+        roomId: string, matrixEventId: string, remoteEventId: string, remoteOriginId?: string, remoteStanzaId?: string
+    ) {
+        await this.pgPool.query("INSERT INTO events VALUES ($1, $2, $3, $4, $5)", [roomId, matrixEventId, remoteEventId, remoteOriginId, remoteStanzaId]);
     }
 
     public async integrityCheck(canWrite: boolean): Promise<void> {

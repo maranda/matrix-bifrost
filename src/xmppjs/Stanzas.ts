@@ -344,9 +344,9 @@ export class StzaMessage extends StzaBase {
         let redacts: string = "";
         if (this.moderation) {
             redacts = `<apply-to id='${this.redactsId}' xmlns='urn:xmpp:fasten:0'>`
-                + `<moderate xmlns='urn:xmpp:message-moderate:0'><retract xmlns='urn:xmpp:message-retract:0'/>`
-                + `${this.moderationReason ? `<reason>${this.moderationReason}</reason>` : ""}</moderate>`
-                + `</apply-to>`;
+                + `<moderated xmlns='urn:xmpp:message-moderate:0' by='${jid(this.from)?.bare()?.toString()}'>`
+                + `<retract xmlns='urn:xmpp:message-retract:0'/>${this.moderationReason ? `<reason>${this.moderationReason}</reason>` : ""}`
+                + `</moderated></apply-to>`;
         } else if (this.redactsId) {
             redacts = `<apply-to id='${this.redactsId}' xmlns='urn:xmpp:fasten:0'><retract xmlns='urn:xmpp:message-retract:0'/></apply-to>`;
         }
@@ -354,8 +354,7 @@ export class StzaMessage extends StzaBase {
         const originId = this.originId ? `<origin-id id='${this.originId}' xmlns='urn:xmpp:sid:0'/>` : "";
         let stanzaId: string = "";
         if (this.stanzaId) {
-            let bareJid = jid(this.from).bare();
-            stanzaId = `<stanza-id id='${this.stanzaId}' xmlns='urn:xmpp:sid:0' by='${bareJid.toString()}'/>`;
+            stanzaId = `<stanza-id id='${this.stanzaId}' xmlns='urn:xmpp:sid:0' by='${jid(this.from)?.bare()?.toString()}'/>`;
         }
         const bodyEl = this.body ? `<body>${encode(this.body)}</body>` : "";
         const toAttr = this.to ? `to='${this.to}' ` : "";
@@ -405,7 +404,7 @@ export class StzaMessageMAM extends StzaBase {
             );
         }
         this.entryStza = new StzaMessage(entry.from, undefined, entry.payload, "groupchat");
-        this.entryId = entry.payload?.id;
+        this.entryId = entry.stanzaId || entry.payload?.id;
         this.entryStza.addNS = "jabber:client"; // add NS to forwarded stanza
         this.entryStza.originId = entry.originId;
         this.entryStza.id = entry.originId ? entry.originId : this.entryStza.id;

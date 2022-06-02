@@ -383,7 +383,9 @@ export class MatrixRoomHandler {
                 const keyArr = [...this.remoteEventIdMapping.keys()].slice(0, 50);
                 keyArr.forEach(this.remoteEventIdMapping.delete.bind(this.remoteEventIdMapping));
             }
-            await this.store.storeRoomEvent(roomId, event_id, data.message.id).catch((ev) => {
+            await this.store.storeRoomEvent(
+                roomId, event_id, data.message.id, data.message.origin_id, data.message.stanza_id
+            ).catch((ev) => {
                 log.warn("Failed to store event mapping:", ev);
             });
         }
@@ -480,7 +482,9 @@ export class MatrixRoomHandler {
             }),
         } as IFetchReceivedGroupMsg);
         if (data.message.id) {
-            await this.store.storeRoomEvent(roomId, event_id, data.message.id).catch((ex) => {
+            await this.store.storeRoomEvent(
+                roomId, event_id, data.message.id, data.message.origin_id, data.message.stanza_id
+            ).catch((ex) => {
                 log.warn("Failed to store event mapping:", ex);
             });
         }
@@ -557,7 +561,10 @@ export class MatrixRoomHandler {
             this.config.bridge.userPrefix,
         ) : senderMatrixUser;
         const intent = this.bridge.getIntent(intentUser.userId);
-        const roomId = await this.createOrGetGroupChatRoom(data, intent, true);
+        const roomId = await this.createOrGetGroupChatRoom(data, intent, true).catch((ex) => {
+            log.error(`Didn't handle join for ${data.sender} -> ${ex}`);
+            return;
+        });
         const account = this.purple.getAccount(data.account.username, data.account.protocol_id);
         // Do we need to set a profile before we can join to avoid uglyness?
         const profileNeeded = this.config.tuning.waitOnProfileBeforeSend &&
