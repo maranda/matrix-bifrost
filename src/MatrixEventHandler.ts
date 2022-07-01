@@ -527,10 +527,14 @@ export class MatrixEventHandler {
                     }
                 }
             } else if (args[1] === "leave") {
-                log.info(event.sender, "is unbridging", event.room_id);
+                let room_id: string = event.room_id;
+                if (event.sender === this.config.bridge.adminMxID && args[2]) {
+                    room_id = args[2];
+                }
+                log.info(event.sender, "is unbridging", room_id);
                 try {
-                    const roomCtx = await this.store.getRoomEntryByMatrixId(event.room_id);
-                    const state = await intent.roomState(event.room_id);
+                    const roomCtx = await this.store.getRoomEntryByMatrixId(room_id);
+                    const state = await intent.roomState(room_id);
                     const props = roomCtx.remote.get<IChatJoinProperties>("properties");
                     const protocol_id = roomCtx.remote.get<string>("protocol_id");
                     let occupants = state.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
@@ -541,19 +545,19 @@ export class MatrixEventHandler {
                             membership: e.content.membership,
                         }
                     ));
-                    log.info(`purging occupants from ${event.room_id}`);
+                    log.info(`purging occupants from ${room_id}`);
                     const protocol = this.purple.getProtocol(protocol_id);
                     await Promise.all(occupants.map(async (userId) => {
                         if (userId.membership === "join") {
                             if (!userId.isRemote) {
-                                log.info(`purging remote user from ${event.room_id} -> ${userId.stateKey}`);
+                                log.info(`purging remote user from ${room_id} -> ${userId.stateKey}`);
                                 const getAcctRes = await this.getAccountForMxid(userId.stateKey, protocol.id);
                                 await ProtoHacks.addJoinProps(protocol.id, props, userId.stateKey, userId.displayname || userId.stateKey);
                                 await getAcctRes.acct.rejectChat(props);
                             } else {
-                                log.info(`purging matrix user from ${event.room_id} -> ${userId.stateKey}`);
+                                log.info(`purging matrix user from ${room_id} -> ${userId.stateKey}`);
                                 const data = await this.store.getRemoteUsersFromMxId(userId.stateKey);
-                                this.bridge.getIntent(userId.stateKey).leave(event.room_id).catch((err) => {
+                                this.bridge.getIntent(userId.stateKey).leave(room_id).catch((err) => {
                                     log.debug("Failed to remove puppet:", err);
                                 }).finally(() => {
                                     if (data.length === 1) {
@@ -566,9 +570,9 @@ export class MatrixEventHandler {
                 } catch (ex) {
                     log.error("Failed to unbridge room:", ex);
                 } finally {
-                    await this.store.removeRoomByRoomId(event.room_id);
+                    await this.store.removeRoomByRoomId(room_id);
                     const intent = this.bridge.getIntent();
-                    intent.leave(event.room_id);
+                    intent.leave(room_id);
                 }
             }
         } catch (ex) {
