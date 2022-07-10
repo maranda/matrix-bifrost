@@ -8,7 +8,7 @@ import { IMatrixMsgContents, MatrixMessageEvent } from "./MatrixTypes";
 const log = Logging.get("MessageFormatter");
 
 export interface IBasicProtocolMessage {
-    body: string;
+    body?: string;
     formatted?: {type: string, body: string}[];
     id?: string;
     origin_id?: string;
@@ -33,8 +33,6 @@ export class MessageFormatter {
         const formatted: { type: string, body: string }[] = [];
         if (redacted) {
             return {
-                body: "A retract was attempted, but it's unsupported by your client",
-                formatted,
                 id: event.event_id,
                 redacted: {redact_id: event.redacts, reason: event.content?.reason},
             }

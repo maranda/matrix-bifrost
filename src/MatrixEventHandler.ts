@@ -793,7 +793,6 @@ Say \`help\` for more commands.
                     msg.redacted.redact_id = originalEventSID;
                 }
                 msg.redacted.moderation = true;
-                msg.body = undefined;
                 this.gatewayHandler.sendMatrixMessage(roomName, event.sender, msg, context);
                 return;
             } catch (ex) {
