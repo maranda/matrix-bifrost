@@ -36,7 +36,7 @@ COPY ./config/config.schema.yaml ./config/config.schema.yaml
 VOLUME [ "/data" ]
 
 # Needed for libpurple symbols to load. See https://github.com/matrix-org/matrix-bifrost/issues/257
-ENV LD_PRELOAD="/usr/lib/libpurple.so.0"
+#ENV LD_PRELOAD="/usr/lib/libpurple.so.0"
 
 ENTRYPOINT [ "node", \
 	"/app/lib/Program.js", \
