@@ -2,7 +2,7 @@ import { IChatJoinProperties } from "./bifrost/Events";
 import { Intent, MatrixUser, WeakEvent } from "matrix-appservice-bridge";
 import { JID } from "@xmpp/jid";
 import * as crypto from "crypto";
-import stringprep from "stringprep";
+import * as stringprep from "stringprep";
 
 export class Util {
 
