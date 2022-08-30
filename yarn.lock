@@ -4327,6 +4327,14 @@ string_decoder@^1.1.1:
   dependencies:
     safe-buffer "~5.2.0"
 
+stringprep@^0.1.1:
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/stringprep/-/stringprep-0.1.1.tgz#b96a244284899722cdbf5ab41efb0ca2fae5229e"
+  integrity sha512-lyUOsVZFrqStD1VdtPgPrnGEAwXzO6zKwP15aCQfGzZ4XymlM5dwHikClec59oFsEwHj1q2uKeZJ2pC0pES39A==
+  dependencies:
+    underscore "~1.4.4"
+    underscore.string "~2.3.1"
+
 string_decoder@~1.1.1:
   version "1.1.1"
   resolved "https://registry.npmjs.org/string_decoder/-/string_decoder-1.1.1.tgz"
