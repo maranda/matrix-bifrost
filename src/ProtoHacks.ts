@@ -44,7 +44,7 @@ export class ProtoHacks {
     }
 
     public static async addJoinProps(protocolId: string, props: any, userId: string, intent: Intent|string) {
-        // When joining XMPP rooms, we should set a handle so pull off one from the users
+        // When joining XMPP rooms, we should set a handle or pull off one from the users
         // profile.
         if (protocolId === PRPL_XMPP || protocolId === XMPP_JS) {
             try {
@@ -61,6 +61,10 @@ export class ProtoHacks {
                         // fetch and compute avatar hash
                         if (profile.avatar_url) {
                             props.avatar_hash = await this.getAvatarHash(userId, profile.avatar_url, intent);
+                        }
+                        // also resource prep the handle
+                        if (!Util.resourcePrep(props.handle)) {
+                            props.handle = userId;
                         }
                     }
                 }
