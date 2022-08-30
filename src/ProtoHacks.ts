@@ -47,14 +47,14 @@ export class ProtoHacks {
         // When joining XMPP rooms, we should set a handle or pull off one from the users
         // profile.
         if (protocolId === PRPL_XMPP || protocolId === XMPP_JS) {
-            try {
-                if (typeof(intent) === "string") {
-                    props.handle = props.handle ? props.handle : intent;
-                } else {
-                    if (!userId.match(/^@/)) {
-                        // User doesn't have a mxId yet
-                        return;
-                    }
+            if (!userId.match(/^@/)) {
+                // User doesn't have a mxId yet
+                return;
+            }
+            if (typeof (intent) === "string") {
+                props.handle = props.handle ? props.handle : intent;
+            } else {
+                try {
                     let profile = await intent.getProfileInfo(userId);
                     props.handle = props.handle ? props.handle : profile.displayname;
                     if (protocolId === XMPP_JS) {
@@ -62,14 +62,14 @@ export class ProtoHacks {
                         if (profile.avatar_url) {
                             props.avatar_hash = await this.getAvatarHash(userId, profile.avatar_url, intent);
                         }
-                        // also resource prep the handle
-                        if (!Util.resourcePrep(props.handle)) {
-                            props.handle = userId;
-                        }
                     }
+                } catch (ex) {
+                    log.warn("Failed to get profile for", userId);
+                    props.handle = props.handle ? props.handle : userId;
                 }
-            } catch (ex) {
-                log.warn("Failed to get profile for", userId);
+            }
+            // also resource prep the handle
+            if (!Util.resourcePrep(props.handle)) {
                 props.handle = userId;
             }
         }

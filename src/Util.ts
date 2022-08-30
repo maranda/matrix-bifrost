@@ -1,8 +1,10 @@
 import { IChatJoinProperties } from "./bifrost/Events";
-import { Intent, MatrixUser, WeakEvent } from "matrix-appservice-bridge";
+import { Intent, Logging, MatrixUser, WeakEvent } from "matrix-appservice-bridge";
 import { JID } from "@xmpp/jid";
 import * as crypto from "crypto";
-import * as stringprep from "stringprep";
+import { stringprep } from "stringprep";
+
+const log = Logging.get("Util.Lib");
 
 export class Util {
 
@@ -104,6 +106,7 @@ export class Util {
         try {
             return stringprep.resourceprep(resource);
         } catch (ex) {
+            log.error(`Encountered error while resource prepping: ${ex}`);
             return null;
         }
     }
