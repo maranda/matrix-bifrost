@@ -54,7 +54,7 @@ export class MessageFormatter {
                 body: `/me ${content.body}`,
                 formatted,
                 id: event.event_id,
-                original_message: originalMessage ? originalMessage : undefined,
+                original_message: originalMessage && event.content["m.relates_to"]?.rel_type === "m.replace" ? originalMessage : undefined,
             };
         }
         if (["m.file", "m.image", "m.video"].includes(event.content.msgtype) && event.content.url) {
