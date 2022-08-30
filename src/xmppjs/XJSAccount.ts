@@ -4,7 +4,6 @@ import { XmppJsInstance, XMPP_PROTOCOL } from "./XJSInstance";
 import { IBifrostAccount, IChatJoinOptions } from "../bifrost/Account";
 import { IBifrostInstance } from "../bifrost/Instance";
 import { BifrostProtocol } from "../bifrost/Protocol";
-import { Element, x } from "@xmpp/xml";
 import { jid, JID } from "@xmpp/jid";
 import { IBasicProtocolMessage } from "../MessageFormatter";
 import { Metrics } from "../Metrics";
@@ -12,6 +11,7 @@ import { Logging } from "matrix-appservice-bridge";
 import { v4 as uuid } from "uuid";
 import { XHTMLIM } from "./XHTMLIM";
 import { StzaMessage, StzaIqPing, StzaPresenceJoin, StzaPresencePart, StzaIqVcardRequest } from "./Stanzas";
+import { Util } from "../Util";
 
 const IDPREFIX = "bifrost";
 const CONFLICT_SUFFIX = "[m]";
@@ -243,7 +243,7 @@ export class XmppJsAccount implements IBifrostAccount {
             throw Error("Missing handle");
         }
         const roomName = components.fullRoomName || `${components.room}@${components.server}`;
-        const to = `${roomName}/${components.handle}`;
+        let to = `${roomName}/${components.handle}`;
         const from = `${this.remoteId}/${this.resource}`;
         log.debug(`joinChat:`, this.remoteId, components);
         if (this.isInRoom(roomName)) {
@@ -259,6 +259,10 @@ export class XmppJsAccount implements IBifrostAccount {
                         server: components.server,
                     } as IChatJoinProperties
                 );
+                if (!Util.resourcePrep(components.handle)) {
+                    components.handle = this.mxId;
+                    to = `${roomName}/${components.handle}`;
+                }
             } else {
                 log.debug(`Didn't join ${to} from ${from}, already joined`);
                 this.cleanDG(to, roomName);
