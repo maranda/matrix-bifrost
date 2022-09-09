@@ -611,7 +611,7 @@ export class StzaIqMAMFin extends StzaBase {
         let firstEl = this.first ? `<first index='${this.index}'>${this.first}</first>` : "";
         let lastEl = this.last ? `<last>${this.last}</last>` : ""
         return `<iq from='${this.from}' to='${this.to}' id='${this.id}' type='result'>`
-            + `<fin xmlns='urn:xmpp:mam:2'${this.complete ? " complete='true'" : ""}>`
+            + `<fin xmlns='urn:xmpp:mam:2' stable='false'${this.complete ? " complete='true'" : ""}>`
             + `<set xmlns='http://jabber.org/protocol/rsm'>`
             + firstEl + lastEl
             + `<count>${this.count}</count >`
