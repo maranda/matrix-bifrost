@@ -4,6 +4,7 @@ import { XmppJsInstance } from "./XJSInstance";
 import { IConfigBridge } from "../Config";
 import { MatrixMessageEvent } from "../MatrixTypes";
 import { IFetchReceivedGroupMsg } from "../bifrost/Events";
+import { Util } from "../Util";
 
 const log = Logging.get("MAMHandler");
 
@@ -249,7 +250,7 @@ export class MAMHandler {
         const membership: { displayname?: string, sender: string }[] =
             state?.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
             {
-                displayname: e.content.displayname,
+                displayname: Util.resourcePrep(e.content.displayname),
                 sender: e.sender,
             }
         ));

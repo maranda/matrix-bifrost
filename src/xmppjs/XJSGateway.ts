@@ -702,7 +702,7 @@ export class XmppJsGateway implements IGateway {
                 this.members.addMatrixMember(
                     chatName,
                     member.stateKey,
-                    jid(`${chatName}/${member.displayname || member.stateKey}`),
+                    jid(`${chatName}/${Util.resourcePrep(member.displayname) || member.stateKey}`),
                     member.avatar_hash,
                 );
             } else if (member.membership === "leave") {

@@ -102,7 +102,7 @@ export class Util {
         return (j.local !== "") ? `${j.local}@${j.domain}` : `${j.domain}`;
     }
 
-    public static resourcePrep(resource: string): string|null {
+    public static resourcePrep(resource: string|unknown): string|null {
         try {
             return stringprep.resourceprep(resource);
         } catch (ex) {
