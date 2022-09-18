@@ -62,7 +62,7 @@ class XmppProtocol extends BifrostProtocol {
 }
 
 export const XMPP_PROTOCOL = new XmppProtocol();
-const SEEN_MESSAGES_SIZE = 16384;
+const SEEN_MESSAGES_SIZE = 327680;
 const XMPP_URI_GLOBAL_MATCH = /xmpp:([\+a-zA-Z0-9.-\u00c0-\u024f\u1e00-\u1eff]+@)?[a-zA-Z0-9.-]+(\?join)?/g;
 const XMPP_URI_SUB_MATCH = /xmpp:((.+)@)?([a-zA-Z0-9.-]+)(\?join)?/;
 
