@@ -488,8 +488,8 @@ export class MatrixEventHandler {
                         log.debug("Attempting to join chat");
                         res = await acct.joinChat(paramSet, this.purple, 60000) as IConversationEvent;
                     } catch (ex) {
-                        log.warn("Failed to join chat for plumbing:", ex);
-                        throw Error("Failed to join chat");
+                        log.warn("Failed to join chat during plumbing:", ex);
+                        throw Error(`Failed to join chat during plumbing -> ${ex}`);
                     }
                     const remoteData = {
                         protocol_id: acct.protocol.id,
