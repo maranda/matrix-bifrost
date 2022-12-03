@@ -195,16 +195,20 @@ export class GatewayHandler {
             log.debug("Not rejoining remote user, gateway not enabled");
             return;
         }
-        const roomName = roomEntry.remote.get<string>("room_name");
-        const room = await this.getVirtualRoom(roomEntry.matrix.getId(), this.bridge.getIntent());
-        const remoteGhosts: BifrostRemoteUser[] = [];
-        for (const ghost of room.membership.filter((m) => m.isRemote && m.membership === "join")) {
-            const user = (await this.store.getRemoteUsersFromMxId(ghost.stateKey))[0];
-            if (user && user.extraData) {
-                remoteGhosts.push(user);
+        try {
+            const roomName = roomEntry.remote.get<string>("room_name");
+            const room = await this.getVirtualRoom(roomEntry.matrix.getId(), this.bridge.getIntent());
+            const remoteGhosts: BifrostRemoteUser[] = [];
+            for (const ghost of room.membership.filter((m) => m.isRemote && m.membership === "join")) {
+                const user = (await this.store.getRemoteUsersFromMxId(ghost.stateKey))[0];
+                if (user && user.extraData) {
+                    remoteGhosts.push(user);
+                }
             }
+            this.purple.gateway.initialMembershipSync(roomName, room, remoteGhosts);
+        } catch (ex) {
+            log.error("Failed Initial Membership Sync:", ex);
         }
-        this.purple.gateway.initialMembershipSync(roomName, room, remoteGhosts);
     }
 
     private async handleRoomJoin(data: IGatewayJoin) {
