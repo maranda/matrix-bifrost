@@ -15,8 +15,8 @@ import { Util } from "../Util";
 
 const IDPREFIX = "bifrost";
 const CONFLICT_SUFFIX = "[m]";
-const LASTSTANZA_CHECK_MS = 2 * 60000;
-const LASTSTANZA_MAXDURATION = 10 * 60000;
+const LASTSTANZA_CHECK_MS = 3 * 60000;
+const LASTSTANZA_MAXDURATION = 12 * 60000;
 const log = Logging.get("XmppJsAccount");
 
 export class XmppJsAccount implements IBifrostAccount {
