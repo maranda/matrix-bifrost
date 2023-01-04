@@ -82,6 +82,9 @@ export class XmppJsAccount implements IBifrostAccount {
                                 handle: this.roomHandles.get(roomName) || handle,
                                 avatar_hash: this.avatarHash,
                             });
+                        } else {
+                            log.warn(`couldn't find a handler or nick for ${this.remoteId} and failed to rejoin removing self ping`);
+                            this.lastStanzaTs.delete(roomName);
                         }
                     });
                 }
