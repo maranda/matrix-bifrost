@@ -505,7 +505,7 @@ export class MatrixRoomHandler {
                     log.warn("Failed to store event mapping:", ex);
                 });
             }
-        } catch {
+        } catch (ex) {
             log.error("Room Handler exception:", ex);
         }
     }
