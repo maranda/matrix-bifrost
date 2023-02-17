@@ -72,38 +72,42 @@ export class GatewayHandler {
             return existingRoom;
         }
         const promise = (async () => {
-            log.debug(`Getting state for ${roomId}`);
-            const state = await intent.roomState(roomId);
-            log.debug(`Got state for ${roomId}`);
-            const encryptedEv = state.find((e) => e.type === "m.room.encrypted");
-            if (encryptedEv) {
-                throw Error("Bridging of encrypted rooms is not supported");
-            }
-            const nameEv = state.find((e) => e.type === "m.room.name");
-            const topicEv = state.find((e) => e.type === "m.room.topic");
-            const historyVis = state.find((e) => e.type === "m.room.history_visibility");
-            const bot = this.bridge.getBot();
-            let membership = state.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
-                {
-                    isRemote: bot.isRemoteUser(e.sender),
-                    stateKey: e.state_key,
-                    displayname: e.content.displayname,
-                    avatar_hash: e.content.avatar_url,
-                    sender: e.sender,
-                    membership: e.content.membership,
+            try {
+                log.debug(`Getting state for ${roomId}`);
+                const state = await intent.roomState(roomId);
+                log.debug(`Got state for ${roomId}`);
+                const encryptedEv = state.find((e) => e.type === "m.room.encrypted");
+                if (encryptedEv) {
+                    throw Error("Bridging of encrypted rooms is not supported");
                 }
-            ))
-            membership = await this.populateAvatarHashes(roomId, membership, intent);
-            const room: IGatewayRoom = {
-                // Default to private
-                allowHistory: HISTORY_SAFE_ENUMS.includes(historyVis?.content?.history_visibility || 'joined'),
-                name: nameEv ? nameEv.content.name : "",
-                topic: topicEv ? topicEv.content.topic : "",
-                roomId,
-                membership,
-            };
-            log.debug(`Hydrated room ${roomId} '${room.name}' '${room.topic}' ${room.membership.length} `);
-            return room;
+                const nameEv = state.find((e) => e.type === "m.room.name");
+                const topicEv = state.find((e) => e.type === "m.room.topic");
+                const historyVis = state.find((e) => e.type === "m.room.history_visibility");
+                const bot = this.bridge.getBot();
+                let membership = state.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
+                    {
+                        isRemote: bot.isRemoteUser(e.sender),
+                        stateKey: e.state_key,
+                        displayname: e.content.displayname,
+                        avatar_hash: e.content.avatar_url,
+                        sender: e.sender,
+                        membership: e.content.membership,
+                    }
+                ))
+                membership = await this.populateAvatarHashes(roomId, membership, intent);
+                const room: IGatewayRoom = {
+                    // Default to private
+                    allowHistory: HISTORY_SAFE_ENUMS.includes(historyVis ?.content ?.history_visibility || 'joined'),
+                    name: nameEv ? nameEv.content.name : "",
+                    topic: topicEv ? topicEv.content.topic : "",
+                    roomId,
+                    membership,
+                };
+                log.debug(`Hydrated room ${roomId} '${room.name}' '${room.topic}' ${room.membership.length} `);
+                return room;
+            } catch (ex) {
+                log.error("Failed to get virtual room:", ex);
+            }
         })();
         this.roomIdCache.set(roomId, promise);
         return promise;
@@ -117,8 +121,12 @@ export class GatewayHandler {
         if (!context.matrix) {
             return;
         }
-        const room = await this.getVirtualRoom(context.matrix.getId(), this.bridge.getIntent());
-        this.purple.gateway.sendMatrixMessage(chatName, sender, body, room);
+        try {
+            const room = await this.getVirtualRoom(context.matrix.getId(), this.bridge.getIntent());
+            this.purple.gateway.sendMatrixMessage(chatName, sender, body, room);
+        } catch (ex) {
+            log.error("Failed to send matrix message:", ex);
+        }
     }
 
     public async sendStateEvent(chatName: string, sender: string, ev: any , context: RoomBridgeStoreEntry) {
@@ -128,19 +136,23 @@ export class GatewayHandler {
         if (!context.matrix) {
             return;
         }
-        const room = await this.getVirtualRoom(context.matrix.getId(), this.bridge.getIntent());
-        if (ev.type === "m.room.name") {
-            log.info("Handing room name change for gateway");
-            room.name = ev.content.name;
-            this.purple.gateway.sendStateChange(chatName, sender, "name", room);
-        } else if (ev.type === "m.room.topic") {
-            log.info("Handing room topic change for gateway");
-            room.topic = ev.content.topic;
-            this.purple.gateway.sendStateChange(chatName, sender, "topic", room);
-        } else if (ev.type === "m.room.avatar") {
-            log.info("Handing room avatar change for gateway");
-            room.avatar = await ProtoHacks.getAvatarHash(context.matrix.getId(), ev.content.url, this.bridge.getIntent());
-            this.purple.gateway.sendStateChange(chatName, sender, "avatar", room);
+        try {
+            const room = await this.getVirtualRoom(context.matrix.getId(), this.bridge.getIntent());
+            if (ev.type === "m.room.name") {
+                log.info("Handing room name change for gateway");
+                room.name = ev.content.name;
+                this.purple.gateway.sendStateChange(chatName, sender, "name", room);
+            } else if (ev.type === "m.room.topic") {
+                log.info("Handing room topic change for gateway");
+                room.topic = ev.content.topic;
+                this.purple.gateway.sendStateChange(chatName, sender, "topic", room);
+            } else if (ev.type === "m.room.avatar") {
+                log.info("Handing room avatar change for gateway");
+                room.avatar = await ProtoHacks.getAvatarHash(context.matrix.getId(), ev.content.url, this.bridge.getIntent());
+                this.purple.gateway.sendStateChange(chatName, sender, "avatar", room);
+            }
+        } catch (ex) {
+            log.error("Failed to send state event:", ex);
         }
     }
 
@@ -153,41 +165,45 @@ export class GatewayHandler {
         if (!context.matrix) {
             return;
         }
-        let rename: boolean = false;
-        const intent = this.bridge.getIntent();
-        const room = await this.getVirtualRoom(context.matrix.getId(), intent);
-        if (this.bridge.getBot().isRemoteUser(event.state_key)) {
-            // This might be a kick or ban.
-            log.info(`Forwarding remote membership for ${event.state_key} in ${chatName}`);
-            this.purple.gateway.sendMatrixMembership(chatName, event, room);
-            return;
-        }
-        const existingMembership = room.membership.find((ev) => ev.stateKey === event.state_key);
-        if (existingMembership) {
-            if (existingMembership.membership === event.content.membership) {
-                if (existingMembership.displayname !== event.content.displayname) {
-                    rename = true;
-                    this.purple.gateway.sendMatrixMembership(chatName, event, room, rename);
-                } else {
-                    return;
-                }
+        try {
+            let rename: boolean = false;
+            const intent = this.bridge.getIntent();
+            const room = await this.getVirtualRoom(context.matrix.getId(), intent);
+            if (this.bridge.getBot().isRemoteUser(event.state_key)) {
+                // This might be a kick or ban.
+                log.info(`Forwarding remote membership for ${event.state_key} in ${chatName}`);
+                this.purple.gateway.sendMatrixMembership(chatName, event, room);
+                return;
             }
-            existingMembership.membership = event.content.membership;
-            existingMembership.displayname = event.content.displayname;
-        } else {
-            const hash = typeof (event.content.avatar_url) === "string" ? await ProtoHacks.getAvatarHash(
-                event.state_key, event.content.avatar_url, intent) : null;
-            room.membership.push({
-                membership: event.content.membership,
-                sender: event.sender,
-                displayname: event.content.displayname,
-                avatar_hash: hash,
-                stateKey: event.state_key,
-                isRemote: false,
-            });
+            const existingMembership = room.membership.find((ev) => ev.stateKey === event.state_key);
+            if (existingMembership) {
+                if (existingMembership.membership === event.content.membership) {
+                    if (existingMembership.displayname !== event.content.displayname) {
+                        rename = true;
+                        this.purple.gateway.sendMatrixMembership(chatName, event, room, rename);
+                    } else {
+                        return;
+                    }
+                }
+                existingMembership.membership = event.content.membership;
+                existingMembership.displayname = event.content.displayname;
+            } else {
+                const hash = typeof (event.content.avatar_url) === "string" ? await ProtoHacks.getAvatarHash(
+                    event.state_key, event.content.avatar_url, intent) : null;
+                room.membership.push({
+                    membership: event.content.membership,
+                    sender: event.sender,
+                    displayname: event.content.displayname,
+                    avatar_hash: hash,
+                    stateKey: event.state_key,
+                    isRemote: false,
+                });
+            }
+            log.info(`Updating membership for ${event.state_key} in ${chatName} ${room.roomId}`);
+            this.purple.gateway.sendMatrixMembership(chatName, event, room);
+        } catch (ex) {
+            log.error("Failed to send matrix membership:", ex);
         }
-        log.info(`Updating membership for ${event.state_key} in ${chatName} ${room.roomId}`);
-        this.purple.gateway.sendMatrixMembership(chatName, event, room);
     }
 
     public async initialMembershipSync(roomEntry: RoomBridgeStoreEntry) {
