@@ -107,6 +107,7 @@ export class GatewayHandler {
                 return room;
             } catch (ex) {
                 log.error("Failed to get virtual room:", ex);
+                this.roomIdCache.delete(roomId);
             }
         })();
         this.roomIdCache.set(roomId, promise);
