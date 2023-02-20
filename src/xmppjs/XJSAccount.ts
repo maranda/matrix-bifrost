@@ -218,7 +218,6 @@ export class XmppJsAccount implements IBifrostAccount {
                 throw new Error("User has no assigned handle for this room, we cannot rejoin!");
             }
             // we need to clean handles before attempting to rejoin
-            this.cleanedDG = 0;
             this.roomHandles.delete(fullRoomName);
             this.roomNicks.delete(`${fullRoomName}/${handle}`);
             await this.joinChat({
