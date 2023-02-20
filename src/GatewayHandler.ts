@@ -73,42 +73,38 @@ export class GatewayHandler {
             return existingRoom;
         }
         const promise = (async () => {
-            try {
-                log.debug(`Getting state for ${roomId}`);
-                const state = await intent.roomState(roomId);
-                log.debug(`Got state for ${roomId}`);
-                const encryptedEv = state.find((e) => e.type === "m.room.encrypted");
-                if (encryptedEv) {
-                    throw Error("Bridging of encrypted rooms is not supported");
-                }
-                const nameEv = state.find((e) => e.type === "m.room.name");
-                const topicEv = state.find((e) => e.type === "m.room.topic");
-                const historyVis = state.find((e) => e.type === "m.room.history_visibility");
-                const bot = this.bridge.getBot();
-                let membership = state.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
-                    {
-                        isRemote: bot.isRemoteUser(e.sender),
-                        stateKey: e.state_key,
-                        displayname: e.content.displayname,
-                        avatar_hash: e.content.avatar_url,
-                        sender: e.sender,
-                        membership: e.content.membership,
-                    }
-                ))
-                membership = await this.populateAvatarHashes(roomId, membership, intent);
-                const room: IGatewayRoom = {
-                    // Default to private
-                    allowHistory: HISTORY_SAFE_ENUMS.includes(historyVis ?.content ?.history_visibility || 'joined'),
-                    name: nameEv ? nameEv.content.name : "",
-                    topic: topicEv ? topicEv.content.topic : "",
-                    roomId,
-                    membership,
-                };
-                log.info(`Hydrated room ${roomId} '${room.name}' '${room.topic}' ${room.membership.length} `);
-                return room;
-            } catch (ex) {
-                log.error("Failed to get virtual room:", ex);
+            log.debug(`Getting state for ${roomId}`);
+            const state = await intent.roomState(roomId);
+            log.debug(`Got state for ${roomId}`);
+            const encryptedEv = state.find((e) => e.type === "m.room.encrypted");
+            if (encryptedEv) {
+                throw Error("Bridging of encrypted rooms is not supported");
             }
+            const nameEv = state.find((e) => e.type === "m.room.name");
+            const topicEv = state.find((e) => e.type === "m.room.topic");
+            const historyVis = state.find((e) => e.type === "m.room.history_visibility");
+            const bot = this.bridge.getBot();
+            let membership = state.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
+                {
+                    isRemote: bot.isRemoteUser(e.sender),
+                    stateKey: e.state_key,
+                    displayname: e.content.displayname,
+                    avatar_hash: e.content.avatar_url,
+                    sender: e.sender,
+                    membership: e.content.membership,
+                }
+            ))
+            membership = await this.populateAvatarHashes(roomId, membership, intent);
+            const room: IGatewayRoom = {
+                // Default to private
+                allowHistory: HISTORY_SAFE_ENUMS.includes(historyVis ?.content ?.history_visibility || 'joined'),
+                name: nameEv ? nameEv.content.name : "",
+                topic: topicEv ? topicEv.content.topic : "",
+                roomId,
+                membership,
+            };
+            log.info(`Hydrated room ${roomId} '${room.name}' '${room.topic}' ${room.membership.length} `);
+            return room;
         })();
         this.roomIdCache.set(roomId, promise);
         return promise;
