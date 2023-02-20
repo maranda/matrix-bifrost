@@ -251,24 +251,28 @@ export class ServiceHandler {
         await this.xmpp.xmppSend(response);
     }
 
-    public queryRoom(roomAlias: string): Promise<any|IGatewayRoom> {
-        return new Promise((resolve, reject) => {
-            this.xmpp.emit("gateway-queryroom", {
-                roomAlias,
-                result: (err, res) => {
-                    if (err) {
-                        reject(err);
-                    }
-                    resolve(res);
-                },
-            } as IGatewayRoomQuery);
-        });
+    public queryRoom(roomAlias: string): Promise<any | IGatewayRoom> {
+        try {
+            return new Promise((resolve, reject) => {
+                this.xmpp.emit("gateway-queryroom", {
+                    roomAlias,
+                    result: (err, res) => {
+                        if (err) {
+                            reject(err);
+                        }
+                        resolve(res);
+                    },
+                } as IGatewayRoomQuery);
+            });
+        } catch (ex) {
+            log.error("Failed querying room:", ex);
+        }
     }
 
     private async handleRoomDiscovery(toStr: string, from: string, id: string) {
-        const to = jid(toStr);
-        const alias = this.parseAliasFromJID(to);
         try {
+            const to = jid(toStr);
+            const alias = this.parseAliasFromJID(to);
             if (!alias) {
                 throw Error("Not a valid alias");
             }
@@ -313,155 +317,167 @@ export class ServiceHandler {
         }
     }
 
-    private async getThumbnailBuffer(avatarUrl: string, intent: any): Promise<{data: Buffer, type: string}|undefined> {
-        let avatar = this.avatarCache.get(avatarUrl);
-        if (avatar) {
-            return avatar;
-        }
-        const thumbUrl = intent.getClient().mxcUrlToHttp(
-            avatarUrl, 256, 256, "scale", false,
-        );
-        if (!thumbUrl) {
-            return undefined;
-        }
+    private async getThumbnailBuffer(avatarUrl: string, intent: any): Promise<{ data: Buffer, type: string } | undefined> {
+        try {
+            let avatar = this.avatarCache.get(avatarUrl);
+            if (avatar) {
+                return avatar;
+            }
+            const thumbUrl = intent.getClient().mxcUrlToHttp(
+                avatarUrl, 256, 256, "scale", false,
+            );
+            if (!thumbUrl) {
+                return undefined;
+            }
 
-        const file = await request.get(thumbUrl, {
-            responseType: "arraybuffer",
-        });
-        avatar = {
-            data: Buffer.from(file.data),
-            type: file.headers["content-type"],
-        };
-        this.avatarCache.set(avatarUrl, avatar);
-        if (this.avatarCache.size > MAX_AVATARS) {
-            this.avatarCache.delete(this.avatarCache.keys()[0]);
+            const file = await request.get(thumbUrl, {
+                responseType: "arraybuffer",
+            });
+            avatar = {
+                data: Buffer.from(file.data),
+                type: file.headers["content-type"],
+            };
+            this.avatarCache.set(avatarUrl, avatar);
+            if (this.avatarCache.size > MAX_AVATARS) {
+                this.avatarCache.delete(this.avatarCache.keys()[0]);
+            }
+            return avatar;
+        } catch (ex) {
+            log.error("Error Processing Thumbnail Buffer:", ex);
         }
-        return avatar;
     }
 
     private async handleVcard(from: string, to: string, id: string, intent: any) {
-        // Fetch mxid.
-        const toJid = jid(to);
-        let mxId: string;
-        let profile: { displayname?: string, avatar_url?: string };
-        // check if we're querying an account or a gateway room
-        if (to.match(/^#/) && !toJid.resource) { // it's a gateway
-            try {
-                const alias = this.parseAliasFromJID(toJid);
-                if (!alias) {
-                    log.warn(`${Util.prepJID(toJid)} tried to query an invalid alias`);
+        try {
+            // Fetch mxid.
+            const toJid = jid(to);
+            let mxId: string;
+            let profile: { displayname?: string, avatar_url?: string };
+            // check if we're querying an account or a gateway room
+            if (to.match(/^#/) && !toJid.resource) { // it's a gateway
+                try {
+                    const alias = this.parseAliasFromJID(toJid);
+                    if (!alias) {
+                        log.warn(`${Util.prepJID(toJid)} tried to query an invalid alias`);
+                        this.notFound(from, to, id, "vCard", "vcard-temp");
+                    }
+                    const query = await this.queryRoom(alias) as any;
+                    mxId = query.roomId;
+                    profile = { avatar_url: query.roomAvatar };
+                } catch (ex) {
+                    log.warn(`Failed to query room vCard: ${ex}`);
                     this.notFound(from, to, id, "vCard", "vcard-temp");
                 }
-                const query = await this.queryRoom(alias) as any;
-                mxId = query.roomId;
-                profile = { avatar_url: query.roomAvatar };
-            } catch (ex) {
-                log.warn(`Failed to query room vCard: ${ex}`);
-                this.notFound(from, to, id, "vCard", "vcard-temp");
-            }
-        } else {
-            const account = this.xmpp.getAccountForJid(toJid);
-            if (!account) {
-                log.warn("Account fetch failed for", to);
-                this.notFound(from, to, id, "vCard", "vcard-temp");
-                return;
-            }
-            mxId = account.mxId;
-            try {
-                // TODO: Move this to a gateway-profilelookup or something.
-                if (mxId.match(/^@/)) {
-                    profile = await intent.getProfileInfo(mxId, null);
-                } else {
-                    throw Error(`Account ${mxId} is still in an undefined state`);
+            } else {
+                const account = this.xmpp.getAccountForJid(toJid);
+                if (!account) {
+                    log.warn("Account fetch failed for", to);
+                    this.notFound(from, to, id, "vCard", "vcard-temp");
+                    return;
                 }
-            } catch (ex) {
-                log.warn("Profile fetch failed for ", mxId, ex);
-                this.notFound(from, to, id, "vCard", "vcard-temp");
-                return;
-            }
-        }
-
-        const vCard: Element[] = [
-            x("URL", undefined, `https://matrix.to/#/${mxId}`),
-        ];
-
-        if (profile.displayname) {
-            vCard.push(x("FN", undefined, profile.displayname));
-            vCard.push(x("NICKNAME", undefined, profile.displayname));
-        }
-
-        if (profile.avatar_url) {
-            try {
-                const res = await this.getThumbnailBuffer(profile.avatar_url, intent);
-                if (res) {
-                    const b64 = res.data.toString("base64");
-                    vCard.push(
-                        x("PHOTO", undefined, [
-                            x("BINVAL", undefined, b64),
-                            x("TYPE", undefined, res.type),
-                        ]),
-                    );
+                mxId = account.mxId;
+                try {
+                    // TODO: Move this to a gateway-profilelookup or something.
+                    if (mxId.match(/^@/)) {
+                        profile = await intent.getProfileInfo(mxId, null);
+                    } else {
+                        throw Error(`Account ${mxId} is still in an undefined state`);
+                    }
+                } catch (ex) {
+                    log.warn("Profile fetch failed for ", mxId, ex);
+                    this.notFound(from, to, id, "vCard", "vcard-temp");
+                    return;
                 }
-            } catch (ex) {
-                log.warn("Could not fetch avatar for ", mxId, ex);
             }
-        }
 
-        this.xmpp.xmppWriteToStream(
-            x("iq", {
-                type: "result",
-                to: from,
-                from: to,
-                id,
-            }, x("vCard", {
-                xmlns: "vcard-temp",
-            },
-            vCard,
-            ),
-            ));
+            const vCard: Element[] = [
+                x("URL", undefined, `https://matrix.to/#/${mxId}`),
+            ];
+
+            if (profile.displayname) {
+                vCard.push(x("FN", undefined, profile.displayname));
+                vCard.push(x("NICKNAME", undefined, profile.displayname));
+            }
+
+            if (profile.avatar_url) {
+                try {
+                    const res = await this.getThumbnailBuffer(profile.avatar_url, intent);
+                    if (res) {
+                        const b64 = res.data.toString("base64");
+                        vCard.push(
+                            x("PHOTO", undefined, [
+                                x("BINVAL", undefined, b64),
+                                x("TYPE", undefined, res.type),
+                            ]),
+                        );
+                    }
+                } catch (ex) {
+                    log.warn("Could not fetch avatar for ", mxId, ex);
+                }
+            }
+
+            this.xmpp.xmppWriteToStream(
+                x("iq", {
+                    type: "result",
+                    to: from,
+                    from: to,
+                    id,
+                }, x("vCard", {
+                    xmlns: "vcard-temp",
+                },
+                    vCard,
+                ),
+                ));
+        } catch (ex) {
+            log.error("Error Handling vCard IQ:", ex);
+        }
     }
 
     private async handlePing(from: string, to: string, id: string) {
-        const fromJid = jid(from);
-        const toJid = jid(to);
-        log.debug(`Got ping from=${from} to=${to} id=${id}`);
-        // https://xmpp.org/extensions/xep-0199.html
-        if (to === this.xmpp.xmppAddress.domain) {
-            // Server-To-Server pings
-            if (jid(from).domain === from) {
-                await this.xmpp.xmppSend(new StzaIqPing(to, from, id, "result"));
-                log.debug(`S2S ping result sent to ${from}`);
+        try {
+            const fromJid = jid(from);
+            const toJid = jid(to);
+            log.debug(`Got ping from=${from} to=${to} id=${id}`);
+            // https://xmpp.org/extensions/xep-0199.html
+            if (to === this.xmpp.xmppAddress.domain) {
+                // Server-To-Server pings
+                if (jid(from).domain === from) {
+                    await this.xmpp.xmppSend(new StzaIqPing(to, from, id, "result"));
+                    log.debug(`S2S ping result sent to ${from}`);
+                    return;
+                }
+                // If the 'from' part is not a domain, this is not a S2S ping.
+            }
+
+            // https://xmpp.org/extensions/xep-0410.html
+            if (toJid.local && toJid.resource) {
+                // Self ping
+                if (!this.xmpp.gateway) {
+                    // No gateways configured, not pinging.
+                    return;
+                }
+                const chatName = Util.prepJID(toJid);
+                const result = !!this.xmpp.gateway.isJIDInMuc(chatName, fromJid);
+                if (result) {
+                    await this.xmpp.xmppSend(new StzaIqPing(to, from, id, "result"));
+                } else {
+                    await this.xmpp.xmppSend(new StzaIqPingError(to, from, id, "not-acceptable", chatName));
+                }
+                log.debug(`Self ping result sent to ${from} (result=${result})`);
                 return;
             }
-            // If the 'from' part is not a domain, this is not a S2S ping.
-        }
 
-        // https://xmpp.org/extensions/xep-0410.html
-        if (toJid.local && toJid.resource) {
-            // Self ping
-            if (!this.xmpp.gateway) {
-                // No gateways configured, not pinging.
-                return;
-            }
-            const chatName = Util.prepJID(toJid);
-            const result = !!this.xmpp.gateway.isJIDInMuc(chatName, fromJid);
-            if (result) {
-                await this.xmpp.xmppSend(new StzaIqPing(to, from, id, "result"));
-            } else {
-                await this.xmpp.xmppSend(new StzaIqPingError(to, from, id, "not-acceptable", chatName));
-            }
-            log.debug(`Self ping result sent to ${from} (result=${result})`);
-            return;
+            // All other pings are invalid in this context and will be ignored.
+            await this.xmpp.xmppSend(new StzaIqPingError(to, from, id, "service-unavailable"));
+        } catch (ex) {
+            log.error("Failed Processing Ping IQ:", ex);
         }
-
-        // All other pings are invalid in this context and will be ignored.
-        await this.xmpp.xmppSend(new StzaIqPingError(to, from, id, "service-unavailable"));
     }
 
     private async handleMAMQuery(to: string, from: string, id: string, type: string, query: Element) {
         // https://xmpp.org/extensions/xep-0313.html
-        const alias = this.parseAliasFromJID(jid(to));
         try {
+            const alias = this.parseAliasFromJID(jid(to));
             if (!alias) {
                 throw Error("Not a valid alias");
             }

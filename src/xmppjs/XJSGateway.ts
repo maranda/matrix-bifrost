@@ -353,224 +353,228 @@ export class XmppJsGateway implements IGateway {
     public async onRemoteJoin(
         err: string|null, joinId: string, room: IGatewayRoom|undefined, ownMxid: string|undefined,
     ) {
-        const startTs = Date.now();
-        log.debug("Handling remote join for " + joinId);
-        const stanza = this.stanzaCache.get(joinId);
-        this.stanzaCache.delete(joinId);
-        if (!stanza) {
-            log.error("Could not find stanza in cache for remoteJoin. Cannot handle");
-            throw Error("Stanza for join not in cache, cannot handle");
-        }
-        const from = jid(stanza.attrs.from);
-        const to = jid(stanza.attrs.to);
-        const chatName = Util.prepJID(to);
-
-        if (err || !room) {
-            const presenceStatus = this.presenceCache.getStatus(stanza.attrs.from);
-            if (presenceStatus) {
-                presenceStatus.online = false;
-                this.presenceCache.modifyStatus(stanza.attrs.from, presenceStatus);
+        try {
+            const startTs = Date.now();
+            log.debug("Handling remote join for " + joinId);
+            const stanza = this.stanzaCache.get(joinId);
+            this.stanzaCache.delete(joinId);
+            if (!stanza) {
+                log.error("Could not find stanza in cache for remoteJoin. Cannot handle");
+                throw Error("Stanza for join not in cache, cannot handle");
             }
-            log.warn("Responding with an error to remote join:", err);
-            // XXX: Specify the actual failure reason.
-            this.xmpp.xmppSend(new StzaPresenceError(
-                stanza.attrs.to, stanza.attrs.from, stanza.attrs.id,
-                chatName, "cancel", "service-unavailable", err,
-            ));
-            return;
-        }
-        room = room!;
+            const from = jid(stanza.attrs.from);
+            const to = jid(stanza.attrs.to);
+            const chatName = Util.prepJID(to);
 
-        if (!ownMxid) {
-            throw Error('ownMxid is not defined');
-        }
-
-        // Ensure our membership is accurate.
-        this.updateMatrixMemberListForRoom(chatName, room, true); // HACK: Always update members for joiners
-        // Check if the nick conflicts.
-        const existingMember = this.members.getMemberByAnonJid(chatName, stanza.attrs.to);
-        if (existingMember) {
-            if (existingMember.type === "matrix") {
-                log.error("Conflicting nickname, not joining");
-                this.xmpp.xmppSend(new StzaPresenceError(
-                    stanza.attrs.to, stanza.attrs.from, stanza.attrs.id,
-                    chatName, "cancel", "conflict",
-                ));
-                throw Error("Conflicting nickname, not joining");
-            }
-            const existingXmppMember = existingMember as IGatewayMemberXmpp;
-            const existingUserId = Util.prepJID(existingXmppMember.realJid!);
-            const currentUserId = Util.prepJID(from);
-            if (existingXmppMember.devices.has(stanza.attrs.from)) {
-                log.debug("Existing device has requested a join");
-                // An existing device has reconnected, so fall through here.
-            } else if (existingUserId === currentUserId) {
-                log.debug(`${currentUserId} is joining from a new device ${from.resource}`);
-            } else {
-                // Different user after the same nick, heck them.
-                log.error("Conflicting nickname, not joining");
-                this.xmpp.xmppSend(new StzaPresenceError(
-                    stanza.attrs.to, stanza.attrs.from, stanza.attrs.id,
-                    chatName, "cancel", "conflict",
-                ));
-                throw Error("Conflicting nickname, not joining");
-            }
-        }
-
-        /* Critical section - We need to emit membership to the user, but
-           we can't store they are joined yet.
-           https://github.com/matrix-org/matrix-bifrost/issues/132
-         */
-
-        // https://xmpp.org/extensions/xep-0045.html#order
-        // 1. membership of others.
-        log.debug('Emitting membership of other users');
-        // Ensure we chunk this
-        const allMembershipPromises: Promise<unknown>[] = [];
-        for (const member of this.members.getMembers(chatName)) {
-            if (member.anonymousJid.toString() === stanza.attrs.to) {
-                continue;
-            }
-            allMembershipPromises.push((async () => {
-                let realJid;
-                let avatarHash;
-                if ((member as IGatewayMemberXmpp).realJid) {
-                    realJid = (member as IGatewayMemberXmpp).realJid.toString();
-                } else {
-                    realJid = this.registration.generateParametersFor(
-                        XMPP_PROTOCOL.id, (member as IGatewayMemberMatrix).matrixId,
-                    ).username;
-                    avatarHash = (member as IGatewayMemberMatrix).avatarHash;
+            if (err || !room) {
+                const presenceStatus = this.presenceCache.getStatus(stanza.attrs.from);
+                if (presenceStatus) {
+                    presenceStatus.online = false;
+                    this.presenceCache.modifyStatus(stanza.attrs.from, presenceStatus);
                 }
-                return this.xmpp.xmppSend(
-                    new StzaPresenceItem(
-                        member.anonymousJid.toString(),
-                        stanza.attrs.from,
-                        undefined,
-                        PresenceAffiliation.Member,
-                        PresenceRole.Participant,
-                        false,
-                        realJid,
-                        null,
-                        avatarHash,
-                    ),
-                )
-            })());
-        }
-
-        // Wait for all presence to be sent first.
-        await Promise.all(allMembershipPromises);
-
-        // get vcard hash
-        const selfHash = stanza.getChild("x", "vcard-temp:x:update")?.getChildText("photo");
-
-        // send room vcard hash
-        const roomHash = await this.getRoomAvatarHash(chatName);
-        if (roomHash) {
-            await this.xmpp.xmppSend(new StzaPresencePhoto(chatName, stanza.attrs.from, "room-avatar", null, roomHash));
-        }
-
-        log.debug("Emitting membership of self");
-        // 2. Send everyone else the users new presence.
-        const reflectedPresence = new StzaPresenceItem(
-            stanza.attrs.to,
-            "",
-            undefined,
-            PresenceAffiliation.Member,
-            PresenceRole.Participant,
-            false,
-            stanza.attrs.from,
-            null,
-            selfHash,
-        );
-        await this.reflectXMPPStanza(chatName, reflectedPresence);
-        // FROM THIS POINT ON, WE CONSIDER THE USER JOINED.
-
-        // 3. Send the user self presence
-        const selfPresence = new StzaPresenceItem(
-            stanza.attrs.to,
-            stanza.attrs.from,
-            stanza.attrs.id,
-            PresenceAffiliation.Member,
-            PresenceRole.Participant,
-            true,
-            null,
-            null,
-            selfHash,
-        );
-
-        // Matrix is non-anon, and Matrix logs.
-        selfPresence.statusCodes.add(XMPPStatusCode.RoomNonAnonymous);
-        selfPresence.statusCodes.add(XMPPStatusCode.RoomLoggingEnabled);
-        await this.xmpp.xmppSend(selfPresence);
-
-
-        this.members.addXmppMember(
-            Util.prepJID(to),
-            from,
-            to,
-            ownMxid,
-        );
-
-        // 4. Room history
-        if (room.allowHistory) {
-            log.debug("Emitting history");
-            const historyLimits: IHistoryLimits = {};
-            const historyRequest = stanza.getChild("x", "http://jabber.org/protocol/muc")?.getChild("history");
-            if (historyRequest !== undefined) {
-                const getIntValue = (str) => {
-                    if (!/^\d+$/.test(str)) {
-                        throw new Error("Not a number");
-                    }
-                    return parseInt(str);
-                };
-                const getDateValue = (str) => {
-                    const val = new Date(str);
-                    // TypeScript doesn't like giving a Date to isNaN, even though it
-                    // works.  And it doesn't like converting directly to number.
-                    if (isNaN(val as unknown as number)) {
-                        throw new Error("Not a date");
-                    }
-                    return val;
-                };
-                const getHistoryParam = (name: string, parser: (str: string) => any): void => {
-                    const param = historyRequest.getAttr(name);
-                    if (param !== undefined) {
-                        try {
-                            historyLimits[name] = parser(param);
-                        } catch (e) {
-                            log.debug(`Invalid ${name} in history management: "${param}" (${e})`);
-                        }
-                    }
-                };
-                getHistoryParam("maxchars", getIntValue);
-                getHistoryParam("maxstanzas", getIntValue);
-                getHistoryParam("seconds", getIntValue);
-                getHistoryParam("since", getDateValue);
-            } else {
-                // default to 20 stanzas if the client doesn't specify
-                historyLimits.maxstanzas = 20;
+                log.warn("Responding with an error to remote join:", err);
+                // XXX: Specify the actual failure reason.
+                this.xmpp.xmppSend(new StzaPresenceError(
+                    stanza.attrs.to, stanza.attrs.from, stanza.attrs.id,
+                    chatName, "cancel", "service-unavailable", err,
+                ));
+                return;
             }
-            const history: Element[] = await this.roomHistory.getHistory(chatName, historyLimits);
-            history.forEach((e) => {
-                e.attrs.to = stanza.attrs.from;
-                this.xmpp.xmppWriteToStream(e);
-            });
-        } else {
-            log.debug("Not emitting history, room does not have visibility turned on");
+            room = room!;
+
+            if (!ownMxid) {
+                throw Error('ownMxid is not defined');
+            }
+
+            // Ensure our membership is accurate.
+            this.updateMatrixMemberListForRoom(chatName, room, true); // HACK: Always update members for joiners
+            // Check if the nick conflicts.
+            const existingMember = this.members.getMemberByAnonJid(chatName, stanza.attrs.to);
+            if (existingMember) {
+                if (existingMember.type === "matrix") {
+                    log.error("Conflicting nickname, not joining");
+                    this.xmpp.xmppSend(new StzaPresenceError(
+                        stanza.attrs.to, stanza.attrs.from, stanza.attrs.id,
+                        chatName, "cancel", "conflict",
+                    ));
+                    throw Error("Conflicting nickname, not joining");
+                }
+                const existingXmppMember = existingMember as IGatewayMemberXmpp;
+                const existingUserId = Util.prepJID(existingXmppMember.realJid!);
+                const currentUserId = Util.prepJID(from);
+                if (existingXmppMember.devices.has(stanza.attrs.from)) {
+                    log.debug("Existing device has requested a join");
+                    // An existing device has reconnected, so fall through here.
+                } else if (existingUserId === currentUserId) {
+                    log.debug(`${currentUserId} is joining from a new device ${from.resource}`);
+                } else {
+                    // Different user after the same nick, heck them.
+                    log.error("Conflicting nickname, not joining");
+                    this.xmpp.xmppSend(new StzaPresenceError(
+                        stanza.attrs.to, stanza.attrs.from, stanza.attrs.id,
+                        chatName, "cancel", "conflict",
+                    ));
+                    throw Error("Conflicting nickname, not joining");
+                }
+            }
+
+            /* Critical section - We need to emit membership to the user, but
+               we can't store they are joined yet.
+               https://github.com/matrix-org/matrix-bifrost/issues/132
+             */
+
+            // https://xmpp.org/extensions/xep-0045.html#order
+            // 1. membership of others.
+            log.debug('Emitting membership of other users');
+            // Ensure we chunk this
+            const allMembershipPromises: Promise<unknown>[] = [];
+            for (const member of this.members.getMembers(chatName)) {
+                if (member.anonymousJid.toString() === stanza.attrs.to) {
+                    continue;
+                }
+                allMembershipPromises.push((async () => {
+                    let realJid;
+                    let avatarHash;
+                    if ((member as IGatewayMemberXmpp).realJid) {
+                        realJid = (member as IGatewayMemberXmpp).realJid.toString();
+                    } else {
+                        realJid = this.registration.generateParametersFor(
+                            XMPP_PROTOCOL.id, (member as IGatewayMemberMatrix).matrixId,
+                        ).username;
+                        avatarHash = (member as IGatewayMemberMatrix).avatarHash;
+                    }
+                    return this.xmpp.xmppSend(
+                        new StzaPresenceItem(
+                            member.anonymousJid.toString(),
+                            stanza.attrs.from,
+                            undefined,
+                            PresenceAffiliation.Member,
+                            PresenceRole.Participant,
+                            false,
+                            realJid,
+                            null,
+                            avatarHash,
+                        ),
+                    )
+                })());
+            }
+
+            // Wait for all presence to be sent first.
+            await Promise.all(allMembershipPromises);
+
+            // get vcard hash
+            const selfHash = stanza.getChild("x", "vcard-temp:x:update") ?.getChildText("photo");
+
+            // send room vcard hash
+            const roomHash = await this.getRoomAvatarHash(chatName);
+            if (roomHash) {
+                await this.xmpp.xmppSend(new StzaPresencePhoto(chatName, stanza.attrs.from, "room-avatar", null, roomHash));
+            }
+
+            log.debug("Emitting membership of self");
+            // 2. Send everyone else the users new presence.
+            const reflectedPresence = new StzaPresenceItem(
+                stanza.attrs.to,
+                "",
+                undefined,
+                PresenceAffiliation.Member,
+                PresenceRole.Participant,
+                false,
+                stanza.attrs.from,
+                null,
+                selfHash,
+            );
+            await this.reflectXMPPStanza(chatName, reflectedPresence);
+            // FROM THIS POINT ON, WE CONSIDER THE USER JOINED.
+
+            // 3. Send the user self presence
+            const selfPresence = new StzaPresenceItem(
+                stanza.attrs.to,
+                stanza.attrs.from,
+                stanza.attrs.id,
+                PresenceAffiliation.Member,
+                PresenceRole.Participant,
+                true,
+                null,
+                null,
+                selfHash,
+            );
+
+            // Matrix is non-anon, and Matrix logs.
+            selfPresence.statusCodes.add(XMPPStatusCode.RoomNonAnonymous);
+            selfPresence.statusCodes.add(XMPPStatusCode.RoomLoggingEnabled);
+            await this.xmpp.xmppSend(selfPresence);
+
+
+            this.members.addXmppMember(
+                Util.prepJID(to),
+                from,
+                to,
+                ownMxid,
+            );
+
+            // 4. Room history
+            if (room.allowHistory) {
+                log.debug("Emitting history");
+                const historyLimits: IHistoryLimits = {};
+                const historyRequest = stanza.getChild("x", "http://jabber.org/protocol/muc") ?.getChild("history");
+                if (historyRequest !== undefined) {
+                    const getIntValue = (str) => {
+                        if (!/^\d+$/.test(str)) {
+                            throw new Error("Not a number");
+                        }
+                        return parseInt(str);
+                    };
+                    const getDateValue = (str) => {
+                        const val = new Date(str);
+                        // TypeScript doesn't like giving a Date to isNaN, even though it
+                        // works.  And it doesn't like converting directly to number.
+                        if (isNaN(val as unknown as number)) {
+                            throw new Error("Not a date");
+                        }
+                        return val;
+                    };
+                    const getHistoryParam = (name: string, parser: (str: string) => any): void => {
+                        const param = historyRequest.getAttr(name);
+                        if (param !== undefined) {
+                            try {
+                                historyLimits[name] = parser(param);
+                            } catch (e) {
+                                log.debug(`Invalid ${name} in history management: "${param}" (${e})`);
+                            }
+                        }
+                    };
+                    getHistoryParam("maxchars", getIntValue);
+                    getHistoryParam("maxstanzas", getIntValue);
+                    getHistoryParam("seconds", getIntValue);
+                    getHistoryParam("since", getDateValue);
+                } else {
+                    // default to 20 stanzas if the client doesn't specify
+                    historyLimits.maxstanzas = 20;
+                }
+                const history: Element[] = await this.roomHistory.getHistory(chatName, historyLimits);
+                history.forEach((e) => {
+                    e.attrs.to = stanza.attrs.from;
+                    this.xmpp.xmppWriteToStream(e);
+                });
+            } else {
+                log.debug("Not emitting history, room does not have visibility turned on");
+            }
+
+            log.debug("Emitting subject");
+            // 5. The room subject
+            this.xmpp.xmppSend(new StzaMessageSubject(chatName, stanza.attrs.from, undefined,
+                `${room.name || ""} ${room.topic ? "| " + room.topic : ""}`,
+            ));
+
+
+            // All done, now for some house cleaning.
+            // Store this user so we can reconnect them on restart.
+            this.upsertXMPPUser(from, ownMxid);
+            log.debug(`Join complete for ${to}. Took ${Date.now() - startTs}ms`);
+        } catch (ex) {
+            log.error("Remote Join Handler Exception:", ex);
         }
-
-        log.debug("Emitting subject");
-        // 5. The room subject
-        this.xmpp.xmppSend(new StzaMessageSubject(chatName, stanza.attrs.from, undefined,
-            `${room.name || ""} ${room.topic ? "| " + room.topic : ""}`,
-        ));
-
-
-        // All done, now for some house cleaning.
-        // Store this user so we can reconnect them on restart.
-        this.upsertXMPPUser(from, ownMxid);
-        log.debug(`Join complete for ${to}. Took ${Date.now() - startTs}ms`);
     }
 
     private upsertXMPPUser(realJid: JID, mxId: string) {
@@ -640,33 +644,41 @@ export class XmppJsGateway implements IGateway {
     }
 
     public async getAvatarBuffer(uri: string, senderId: string): Promise<{ type: string; data: Buffer; }> {
-        // The URI is the base64 value of the data prefixed by the type.
-        const [type, dataBase64] = uri.split("|");
-        if (!type || !type.includes("/") || !dataBase64) {
-            throw Error("Avatar uri was malformed");
+        try {
+            // The URI is the base64 value of the data prefixed by the type.
+            const [type, dataBase64] = uri.split("|");
+            if (!type || !type.includes("/") || !dataBase64) {
+                throw Error("Avatar uri was malformed");
+            }
+            const data = Buffer.from(dataBase64, "base64");
+            return { type, data };
+        } catch (ex) {
+            log.error("Encountered Exception while fetching Avatar's buffer:", ex);
         }
-        const data = Buffer.from(dataBase64, "base64");
-        return { type, data };
     }
 
     public maskPMSenderRecipient(senderMxid: string, recipientJid: string)
-        : {recipient: string, sender: string}|undefined {
-        const j = jid(recipientJid);
-        const convName = Util.prepJID(j);
-        log.info("Looking up possible gateway:", senderMxid, recipientJid, convName);
-        const recipient = this.members.getMemberByAnonJid<IGatewayMemberXmpp>(convName, recipientJid);
-        if (!recipient) {
-            return undefined;
+        : { recipient: string, sender: string } | undefined {
+        try {
+            const j = jid(recipientJid);
+            const convName = Util.prepJID(j);
+            log.info("Looking up possible gateway:", senderMxid, recipientJid, convName);
+            const recipient = this.members.getMemberByAnonJid<IGatewayMemberXmpp>(convName, recipientJid);
+            if (!recipient) {
+                return undefined;
+            }
+            const sender = this.members.getMatrixMemberByMatrixId(convName, senderMxid);
+            if (!sender) {
+                log.warn("Couldn't get sender's mxid");
+                throw Error("Couldn't find the senders anonymous jid for a MUC PM over the gateway");
+            }
+            return {
+                recipient: recipient.devices[recipient.devices.size - 1].toString(),
+                sender: sender.anonymousJid.toString(),
+            };
+        } catch (ex) {
+            log.error("Encountered Exception while processing PM sender recipient:", ex);
         }
-        const sender = this.members.getMatrixMemberByMatrixId(convName, senderMxid);
-        if (!sender) {
-            log.warn("Couldn't get sender's mxid");
-            throw Error("Couldn't find the senders anonymous jid for a MUC PM over the gateway");
-        }
-        return {
-            recipient: recipient.devices[recipient.devices.size - 1].toString(),
-            sender: sender.anonymousJid.toString(),
-        };
     }
 
     private async getRoomAvatarHash(chatName: string) {
