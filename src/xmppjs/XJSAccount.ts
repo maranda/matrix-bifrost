@@ -1,5 +1,5 @@
 import { IChatJoinProperties,
-    IUserInfo, IConversationEvent, IChatJoined, IAccountMinimal, IStoreRemoteUser, ICleanDoppleganger } from "../bifrost/Events";
+    IUserInfo, IConversationEvent, IChatJoined, IAccountMinimal, IStoreRemoteUser } from "../bifrost/Events";
 import { XmppJsInstance, XMPP_PROTOCOL } from "./XJSInstance";
 import { IBifrostAccount, IChatJoinOptions } from "../bifrost/Account";
 import { IBifrostInstance } from "../bifrost/Instance";
@@ -40,7 +40,6 @@ export class XmppJsAccount implements IBifrostAccount {
     public readonly roomNicks: Set<string>;
     private readonly pmSessions: Set<string>;
     private avatarHash?: string;
-    private cleanedDG: number;
     private lastStanzaTs: Map<string, number>;
     private checkInterval: NodeJS.Timeout;
     constructor(
@@ -53,7 +52,6 @@ export class XmppJsAccount implements IBifrostAccount {
         this.roomNicks = new Set();
         this.waitingToJoin = new Set();
         this.pmSessions = new Set();
-        this.cleanedDG = 0;
         this.lastStanzaTs = new Map();
         this.checkInterval = setInterval(() => {
             this.lastStanzaTs.forEach((ts, roomName) => {
@@ -253,8 +251,6 @@ export class XmppJsAccount implements IBifrostAccount {
             const currentHandle = this.roomHandles.get(roomName);
             if (currentHandle !== components.handle) {
                 log.debug(`Leaving ${to} with old puppet ${currentHandle}`);
-                this.cleanedDG = 0;
-                this.cleanDG(to, roomName);
                 await this.rejectChat(
                     {
                         fullRoomName: components.fullRoomName,
@@ -268,7 +264,6 @@ export class XmppJsAccount implements IBifrostAccount {
                 }
             } else {
                 log.debug(`Didn't join ${to} from ${from}, already joined`);
-                this.cleanDG(to, roomName);
                 return {
                     eventName: "already-joined",
                     account: {
@@ -285,7 +280,6 @@ export class XmppJsAccount implements IBifrostAccount {
             log.info(`Didn't join ${to} from ${from}, self ping says we are joined`);
             this.roomHandles.set(roomName, components.handle);
             this.roomNicks.add(to);
-            this.cleanDG(to, roomName);
             return {
                 eventName: "already-joined",
                 account: {
@@ -319,7 +313,6 @@ export class XmppJsAccount implements IBifrostAccount {
                     if (data.conv.name === roomName) {
                         this.waitingToJoin.delete(roomName);
                         log.info(`Got ack for join ${roomName}`);
-                        this.cleanDG(to, roomName);
                         clearTimeout(timer);
                         this.xmpp.removeListener("chat-joined", cb);
                         resolve(data);
@@ -435,17 +428,5 @@ export class XmppJsAccount implements IBifrostAccount {
     public sendIMTyping() {
         // No-op
         return;
-    }
-
-    private cleanDG(to: string, roomName: string) {
-        if (this.cleanedDG >= 3) {
-            return;
-        }
-        this.xmpp.emit("clean-remote-doppleganger", {
-            sender: to,
-            protocol: this.xmpp.getProtocol(XMPP_PROTOCOL.id),
-            roomName,
-        } as ICleanDoppleganger);
-        this.cleanedDG++;
     }
 }

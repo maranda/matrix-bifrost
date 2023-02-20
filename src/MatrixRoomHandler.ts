@@ -12,7 +12,6 @@ import {
     IChatTyping,
     IStoreRemoteUser,
     IChatReadReceipt,
-    ICleanDoppleganger,
     IFetchReceivedGroupMsg,
 } from "./bifrost/Events";
 import { ProfileSync } from "./ProfileSync";
@@ -101,7 +100,6 @@ export class MatrixRoomHandler {
                 this.alreadyKnownSenders.add(storeUser.remoteId);
             }
         });
-        purple.on("clean-remote-doppleganger", this.handleDPCleaning.bind(this));
         this.remoteEventIdMapping = new Map();
         purple.on("read-receipt", this.handleReadReceipt.bind(this));
         purple.on("remove-room-lock", (data: { roomId: string }) => {
@@ -779,36 +777,6 @@ export class MatrixRoomHandler {
             log.debug(`Updated read reciept for ${userId} in ${roomId}`);
         } catch (ex) {
             log.error("Room Handler exception:", ex);
-        }
-    }
-
-    private async handleDPCleaning(data: ICleanDoppleganger) {
-        const senderMatrixUser = data.protocol.getMxIdForProtocol(
-            data.sender,
-            this.config.bridge.domain,
-            this.config.bridge.userPrefix,
-        );
-        let remoteData: IRemoteGroupData = {
-            protocol_id: data.protocol.id,
-            room_name: data.roomName,
-        };
-        let remoteEntry: RoomBridgeStoreEntry;
-        if (this.remoteEntriesCache.has(remoteData)) {
-            remoteEntry = this.remoteEntriesCache.get(remoteData);
-        } else {
-            remoteEntry = await this.store.getGroupRoomByRemoteData(remoteData);
-            this.remoteEntriesCache.set(remoteData, remoteEntry);
-        }
-        const intent = this.bridge.getIntent(senderMatrixUser.getId());
-        try {
-            intent.leave(remoteEntry.matrix?.getId(), "Doppleganger cleaned up").catch((err) => {
-                log.debug("User probably doesn't exist:", err);
-            }).finally(() => {
-                this.store.removeGhost(senderMatrixUser.getId(), data.protocol, data.sender);
-            });
-            log.debug(`Removing detected doppleganger ${data.sender} -> ${senderMatrixUser.getId()}`);
-        } catch (ex) {
-            log.warn(`Failed cleaning doppleganger: ${ex}`);
         }
     }
 

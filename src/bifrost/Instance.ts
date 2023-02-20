@@ -16,7 +16,6 @@ import { IEventBody,
     IChatReadReceipt,
     IGatewayPublicRoomsQuery,
     IChatJoinProperties,
-    ICleanDoppleganger,
     IFetchReceivedGroupMsg,
 } from "./Events";
 import { EventEmitter } from "events";
@@ -53,7 +52,6 @@ export interface IBifrostInstance extends EventEmitter {
     on(name: "received-im-msg"|"received-chat-msg", cb: (ev: IReceivedImMsg) => void);
     on(name: "mam-add-entry", cb: (ev: IFetchReceivedGroupMsg) => void);
     on(name: "store-remote-user", cb: (ev: IStoreRemoteUser) => void);
-    on(name: "clean-remote-doppleganger", cb: (ev: ICleanDoppleganger) => void);
     on(name: "read-receipt", cb: (ev: IChatReadReceipt) => void);
     on(name: "remove-room-lock", cb: (ev: { roomId: string }) => void);
     on(name: "initialize-instance", cb: (ev: any) => void);

@@ -123,9 +123,3 @@ export interface IStoreRemoteUser {
     protocol_id: string;
     data?: any;
 }
-
-export interface ICleanDoppleganger {
-    sender: string;
-    protocol: BifrostProtocol;
-    roomName: string;
-}
