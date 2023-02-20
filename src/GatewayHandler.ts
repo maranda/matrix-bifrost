@@ -69,6 +69,7 @@ export class GatewayHandler {
     public async getVirtualRoom(roomId: string, intent: Intent): Promise<IGatewayRoom> {
         const existingRoom = this.roomIdCache.get(roomId);
         if (existingRoom) {
+            log.info(`Fetching room ${roomId} from Room Cache -> ${existingRoom}`);
             return existingRoom;
         }
         const promise = (async () => {
@@ -103,7 +104,7 @@ export class GatewayHandler {
                     roomId,
                     membership,
                 };
-                log.debug(`Hydrated room ${roomId} '${room.name}' '${room.topic}' ${room.membership.length} `);
+                log.info(`Hydrated room ${roomId} '${room.name}' '${room.topic}' ${room.membership.length} `);
                 return room;
             } catch (ex) {
                 log.error("Failed to get virtual room:", ex);
