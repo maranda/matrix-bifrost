@@ -438,7 +438,7 @@ export class XmppJsAccount implements IBifrostAccount {
     }
 
     private cleanDG(to: string, roomName: string) {
-        if (this.cleanedDG >= 10) {
+        if (this.cleanedDG >= 3) {
             return;
         }
         this.xmpp.emit("clean-remote-doppleganger", {

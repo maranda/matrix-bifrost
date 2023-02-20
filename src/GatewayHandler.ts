@@ -107,7 +107,6 @@ export class GatewayHandler {
                 return room;
             } catch (ex) {
                 log.error("Failed to get virtual room:", ex);
-                this.roomIdCache.delete(roomId);
             }
         })();
         this.roomIdCache.set(roomId, promise);
@@ -276,6 +275,9 @@ export class GatewayHandler {
                 );
             }
             const vroom = await this.getVirtualRoom(roomId, intent);
+            if (!vroom) {
+                throw Error(`Failed to gather Virtual Room ${data.roomAlias} -> ${roomId}`);
+            }
             await this.purple.gateway.onRemoteJoin(null, data.join_id, vroom, intentUser);
         } catch (ex) {
             const roomName = room?.remote?.get<string>("room_name");

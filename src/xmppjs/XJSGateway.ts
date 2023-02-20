@@ -366,7 +366,7 @@ export class XmppJsGateway implements IGateway {
             const to = jid(stanza.attrs.to);
             const chatName = Util.prepJID(to);
 
-            if (err || !room) {
+            if (err) {
                 const presenceStatus = this.presenceCache.getStatus(stanza.attrs.from);
                 if (presenceStatus) {
                     presenceStatus.online = false;
