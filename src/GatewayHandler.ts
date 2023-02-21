@@ -1,4 +1,4 @@
-import { IGatewayJoin, IGatewayRoomQuery, IGatewayPublicRoomsQuery, IChatJoinProperties } from "./bifrost/Events";
+import { IGatewayJoin, IGatewayRoomQuery, IGatewayPublicRoomsQuery, IGatewayPopulateHashes, IChatJoinProperties } from "./bifrost/Events";
 import { IBifrostInstance } from "./bifrost/Instance";
 import { Bridge, Logging, Intent, RoomBridgeStoreEntry, WeakEvent } from "matrix-appservice-bridge";
 import { Config } from "./Config";
@@ -51,6 +51,7 @@ export class GatewayHandler {
         purple.on("gateway-queryroom", this.handleRoomQuery.bind(this));
         purple.on("gateway-joinroom", this.handleRoomJoin.bind(this));
         purple.on("gateway-publicrooms", this.handlePublicRooms.bind(this));
+        purple.on("gateway-populateavatarhashes", this.handlePopulateHashes.bind(this));
     }
 
     private async populateAvatarHashes(roomId: string, membership: any, intent: Intent) {
@@ -92,8 +93,7 @@ export class GatewayHandler {
                     sender: e.sender,
                     membership: e.content.membership,
                 }
-            ))
-            membership = await this.populateAvatarHashes(roomId, membership, intent);
+            ));
             const room: IGatewayRoom = {
                 // Default to private
                 allowHistory: HISTORY_SAFE_ENUMS.includes(historyVis?.content?.history_visibility || 'joined'),
@@ -103,6 +103,10 @@ export class GatewayHandler {
                 membership,
             };
             log.info(`Hydrated room ${roomId} '${room.name}' '${room.topic}' ${room.membership.length} `);
+            this.purple.emit("gateway-populateavatarhashes", {
+                room,
+                intent
+            });
             this.roomIdCache.set(roomId, room);
             return room;
         })();
@@ -285,7 +289,7 @@ export class GatewayHandler {
                 });
             }
             log.warn("Failed to join room:", ex.message);
-            this.roomIdCache.delete(roomId);
+            this.roomIdCache.delete(roomId); // invalidate cache
             await this.purple.gateway.onRemoteJoin(ex.message, data.join_id, undefined, undefined);
         }
     }
@@ -320,6 +324,14 @@ export class GatewayHandler {
         } catch (ex) {
             log.warn("Room not found:", ex);
             ev.result(Error("Room not found"));
+        }
+    }
+
+    private async handlePopulateHashes(ev: IGatewayPopulateHashes) {
+        try {
+            ev.room.membership = await this.populateAvatarHashes(ev.room.roomId, ev.room.membership, ev.intent);
+        } catch (ex) {
+            log.error("Failed deferred hashes population:", ex);
         }
     }
 

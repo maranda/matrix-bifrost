@@ -6,7 +6,8 @@ import { IBifrostAccount } from "./Account";
 import { IBasicProtocolMessage } from "../MessageFormatter";
 import { IPublicRoomsResponse } from "../MatrixTypes";
 import { BifrostProtocol } from "./Protocol";
-import { WeakEvent } from "matrix-appservice-bridge";
+import { WeakEvent, Intent } from "matrix-appservice-bridge";
+import { IGatewayRoom } from "./Gateway";
 
 export interface IChatJoinProperties {[key: string]: string; }
 
@@ -106,6 +107,11 @@ export interface IGatewayPublicRoomsQuery extends IGatewayRequest {
     searchString: string;
     homeserver: string|null;
     result: (err: Error|null, res?: IPublicRoomsResponse) => void;
+}
+
+export interface IGatewayPopulateHashes {
+    room: IGatewayRoom;
+    intent: Intent;
 }
 
 export interface IGatewayJoin {
