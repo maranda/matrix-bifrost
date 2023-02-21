@@ -27,6 +27,7 @@ import { IHistoryLimits, HistoryManager, MemoryStorage } from "./HistoryManager"
 import { Util } from "../Util";
 import { ProtoHacks } from "../ProtoHacks";
 
+const REGEXP_MXC = /^mxc:\/\/.*/;
 const log = Logging.get("XmppJsGateway");
 
 export interface RemoteGhostExtraData {
@@ -178,9 +179,9 @@ export class XmppJsGateway implements IGateway {
         return null;
     }
 
-    public sendMatrixMessage(
+    public async sendMatrixMessage(
         chatName: string, sender: string, msg: IBasicProtocolMessage, room: IGatewayRoom) {
-        this.updateMatrixMemberListForRoom(chatName, room);
+        await this.updateMatrixMemberListForRoom(chatName, room);
         log.info(`Sending ${msg.id} to ${chatName}`);
         const from = this.members.getMatrixMemberByMatrixId(chatName, sender);
         if (!from) {
@@ -387,7 +388,7 @@ export class XmppJsGateway implements IGateway {
             }
 
             // Ensure our membership is accurate.
-            this.updateMatrixMemberListForRoom(chatName, room, true); // HACK: Always update members for joiners
+            await this.updateMatrixMemberListForRoom(chatName, room, true); // HACK: Always update members for joiners
             // Check if the nick conflicts.
             const existingMember = this.members.getMemberByAnonJid(chatName, stanza.attrs.to);
             if (existingMember) {
@@ -441,7 +442,9 @@ export class XmppJsGateway implements IGateway {
                         realJid = this.registration.generateParametersFor(
                             XMPP_PROTOCOL.id, (member as IGatewayMemberMatrix).matrixId,
                         ).username;
-                        avatarHash = (member as IGatewayMemberMatrix).avatarHash;
+                        if (!(member as IGatewayMemberMatrix).avatarHash?.match(REGEXP_MXC)) {
+                            avatarHash = (member as IGatewayMemberMatrix).avatarHash;
+                        }
                     }
                     return this.xmpp.xmppSend(
                         new StzaPresenceItem(
@@ -592,9 +595,9 @@ export class XmppJsGateway implements IGateway {
         log.debug(`Upserted XMPP user ${realJidStripped} ${realJidStripped}`);
     }
 
-    public initialMembershipSync(chatName: string, room: IGatewayRoom, ghosts: BifrostRemoteUser[]) {
+    public async initialMembershipSync(chatName: string, room: IGatewayRoom, ghosts: BifrostRemoteUser[]) {
         log.info(`Adding initial synced member list to ${chatName}`);
-        this.updateMatrixMemberListForRoom(chatName, room);
+        await this.updateMatrixMemberListForRoom(chatName, room);
         for (const xmppUser of ghosts) {
             log.debug(`Connecting ${xmppUser.id} to ${chatName}`);
             const extraData = xmppUser.extraData as RemoteGhostExtraData;
@@ -699,7 +702,7 @@ export class XmppJsGateway implements IGateway {
         }
     }
 
-    private updateMatrixMemberListForRoom(chatName: string, room: IGatewayRoom, allowForJoin = false) {
+    private async updateMatrixMemberListForRoom(chatName: string, room: IGatewayRoom, allowForJoin = false) {
         if (!allowForJoin && this.members.getMatrixMembers(chatName).length !== 0) {
             return;
         }
@@ -711,11 +714,19 @@ export class XmppJsGateway implements IGateway {
             }
             if (member.membership === "join") {
                 joined++;
+                let avatarHash: string = member.avatar_hash;
+                if (avatarHash?.match(REGEXP_MXC)) {
+                    avatarHash = await ProtoHacks.getAvatarHash(member.stateKey, member.avatar_hash, this.bridge.getIntent());
+                    if (avatarHash) {
+                        const idx = room.membership.findIndex((entry) => entry.avatar_hash === member.avatar_hash);
+                        room.membership[idx].avatar_hash = avatarHash;
+                    }
+                }
                 this.members.addMatrixMember(
                     chatName,
                     member.stateKey,
                     jid(`${chatName}/${Util.resourcePrep(member.displayname) || member.stateKey}`),
-                    member.avatar_hash,
+                    avatarHash,
                 );
             } else if (member.membership === "leave") {
                 left++;

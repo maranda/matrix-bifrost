@@ -1,4 +1,4 @@
-import { IGatewayJoin, IGatewayRoomQuery, IGatewayPublicRoomsQuery, IGatewayPopulateHashes, IChatJoinProperties } from "./bifrost/Events";
+import { IGatewayJoin, IGatewayRoomQuery, IGatewayPublicRoomsQuery, IChatJoinProperties } from "./bifrost/Events";
 import { IBifrostInstance } from "./bifrost/Instance";
 import { Bridge, Logging, Intent, RoomBridgeStoreEntry, WeakEvent } from "matrix-appservice-bridge";
 import { Config } from "./Config";
@@ -51,25 +51,12 @@ export class GatewayHandler {
         purple.on("gateway-queryroom", this.handleRoomQuery.bind(this));
         purple.on("gateway-joinroom", this.handleRoomJoin.bind(this));
         purple.on("gateway-publicrooms", this.handlePublicRooms.bind(this));
-        purple.on("gateway-populateavatarhashes", this.handlePopulateHashes.bind(this));
-    }
-
-    private async populateAvatarHashes(roomId: string, membership: any, intent: Intent) {
-        log.info(`Populating avatar hashes from mxc URLs for ${roomId} members`);
-        let res = membership.slice();
-        for (const [idx, member] of membership.entries()) {
-            if (typeof(member.avatar_hash) === "string") {
-                let entry = res[idx];
-                entry.avatar_hash = await ProtoHacks.getAvatarHash(member.stateKey, member.avatar_hash, intent);
-            }
-        }
-        return res;
     }
 
     public async getVirtualRoom(roomId: string, intent: Intent): Promise<IGatewayRoom> {
         const existingRoom = this.roomIdCache.get(roomId);
         if (existingRoom) {
-            log.info(`Fetching room ${roomId} from Room Cache -> '${existingRoom.name}' - '${existingRoom.membership.length}'`);
+            log.debug(`Fetching room ${roomId} from Room Cache -> '${existingRoom.name}' - '${existingRoom.membership.length}'`);
             return existingRoom;
         }
         const promise = (async () => {
@@ -103,10 +90,6 @@ export class GatewayHandler {
                 membership,
             };
             log.info(`Hydrated room ${roomId} '${room.name}' '${room.topic}' ${room.membership.length} `);
-            this.purple.emit("gateway-populateavatarhashes", {
-                room,
-                intent
-            });
             this.roomIdCache.set(roomId, room);
             return room;
         })();
@@ -221,7 +204,7 @@ export class GatewayHandler {
                     remoteGhosts.push(user);
                 }
             }
-            this.purple.gateway.initialMembershipSync(roomName, room, remoteGhosts);
+            await this.purple.gateway.initialMembershipSync(roomName, room, remoteGhosts);
         } catch (ex) {
             log.error("Failed Initial Membership Sync:", ex);
         }
@@ -327,15 +310,7 @@ export class GatewayHandler {
         }
     }
 
-    private async handlePopulateHashes(ev: IGatewayPopulateHashes) {
-        try {
-            ev.room.membership = await this.populateAvatarHashes(ev.room.roomId, ev.room.membership, ev.intent);
-        } catch (ex) {
-            log.error("Failed deferred hashes population:", ex);
-        }
-    }
-
-    private async handlePublicRooms(ev: IGatewayPublicRoomsQuery) {
+     private async handlePublicRooms(ev: IGatewayPublicRoomsQuery) {
         log.info(`Trying to discover public rooms search=${ev.searchString} homeserver=${ev.homeserver}`);
         try {
             // XXX: We should check to see if the room exists in our cache.

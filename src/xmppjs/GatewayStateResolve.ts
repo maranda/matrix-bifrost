@@ -6,7 +6,6 @@ import { IStza, PresenceAffiliation, PresenceRole, StzaBase, StzaPresenceItem } 
 import { IGatewayRoom } from "../bifrost/Gateway";
 import { XMPPStatusCode } from "./XMPPConstants";
 
-const REGEXP_MXC = /^mxc:\/\/.*/;
 const log = Logging.get("GatewayStateResolve");
 
 function sendToAllDevices(presence: StzaPresenceItem, devices: Set<string>) {
@@ -71,10 +70,6 @@ export class GatewayStateResolve {
             const roomMembership = room.membership.find((e) => e.stateKey === event.state_key);
             // Matrix Join
             members.addMatrixMember(chatName, event.state_key, jid(from), roomMembership.avatar_hash);
-            let avatarHash: string;
-            if (!roomMembership.avatar_hash?.match(REGEXP_MXC)) {
-                avatarHash = roomMembership.avatar_hash;
-            }
             // Reflect to all
             stanzas = sendToAllDevices(
                 new StzaPresenceItem(
@@ -86,7 +81,7 @@ export class GatewayStateResolve {
                     null,
                     null,
                     null,
-                    avatarHash,
+                    roomMembership.avatar_hash,
                 ), allDevices,
             );
         } else if (membership === "leave" && event.state_key === event.sender) {

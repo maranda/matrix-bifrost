@@ -109,11 +109,6 @@ export interface IGatewayPublicRoomsQuery extends IGatewayRequest {
     result: (err: Error|null, res?: IPublicRoomsResponse) => void;
 }
 
-export interface IGatewayPopulateHashes {
-    room: IGatewayRoom;
-    intent: Intent;
-}
-
 export interface IGatewayJoin {
     sender: string;
     protocol_id: string;
