@@ -36,8 +36,7 @@ const HISTORY_SAFE_ENUMS = ['shared', 'world_readable'];
  * for XMPP.js).
  */
 export class GatewayHandler {
-    private aliasCache: Map<string, IGatewayRoom> = new Map();
-    private roomIdCache: Map<string, Promise<IGatewayRoom>> = new Map();
+    private roomIdCache: Map<string, IGatewayRoom> = new Map();
 
     constructor(
         private purple: IBifrostInstance,
@@ -69,7 +68,7 @@ export class GatewayHandler {
     public async getVirtualRoom(roomId: string, intent: Intent): Promise<IGatewayRoom> {
         const existingRoom = this.roomIdCache.get(roomId);
         if (existingRoom) {
-            log.info(`Fetching room ${roomId} from Room Cache -> ${existingRoom}`);
+            log.info(`Fetching room ${roomId} from Room Cache -> '${existingRoom.name}' - '${existingRoom.membership.length}'`);
             return existingRoom;
         }
         const promise = (async () => {
@@ -97,16 +96,16 @@ export class GatewayHandler {
             membership = await this.populateAvatarHashes(roomId, membership, intent);
             const room: IGatewayRoom = {
                 // Default to private
-                allowHistory: HISTORY_SAFE_ENUMS.includes(historyVis ?.content ?.history_visibility || 'joined'),
+                allowHistory: HISTORY_SAFE_ENUMS.includes(historyVis?.content?.history_visibility || 'joined'),
                 name: nameEv ? nameEv.content.name : "",
                 topic: topicEv ? topicEv.content.topic : "",
                 roomId,
                 membership,
             };
             log.info(`Hydrated room ${roomId} '${room.name}' '${room.topic}' ${room.membership.length} `);
+            this.roomIdCache.set(roomId, room);
             return room;
         })();
-        this.roomIdCache.set(roomId, promise);
         return promise;
     }
 
