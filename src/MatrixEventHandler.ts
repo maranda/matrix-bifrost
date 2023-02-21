@@ -579,9 +579,29 @@ export class MatrixEventHandler {
                     } catch (ex) {
                         log.error("Failed to unbridge room:", ex);
                     } finally {
+                        await intent.sendMessage(event.room_id, {
+                            msgtype: "m.notice",
+                            body: "Successfully unbridged " + room_id,
+                        });
                         await this.store.removeRoomByRoomId(room_id);
-                        const intent = this.bridge.getIntent();
                         intent.leave(room_id);
+
+                    }
+                } else if (args[1] === "self-deop") {
+                    let room_id: string = event.room_id;
+                    if (event.sender === this.config.bridge.adminMxID && args[2]) {
+                        room_id = args[2];
+                    }
+                    log.info(event.sender, "bot is self deopping into", room_id);
+                    try {
+                        await intent.setPowerLevel(room_id, this.bridge.getBot().getUserId(), 0);
+                    } catch (ex) {
+                        log.error(`Failed self-deop in ${room_id}: ${ex}`);
+                    } finally {
+                        await intent.sendMessage(event.room_id, {
+                            msgtype: "m.notice",
+                            body: "Successfully self-deopped into " + room_id,
+                        });
                     }
                 }
             } catch (ex) {

@@ -26,4 +26,4 @@ export enum XMPPFeatures {
     vCard = "vcard-temp",
 }
 
-export const BridgeVersion = "0.4.0.arianet.5"
+export const BridgeVersion = "0.5.0.arianet.5"
