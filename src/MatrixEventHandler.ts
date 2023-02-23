@@ -51,54 +51,58 @@ export class MatrixEventHandler {
     }
 
     public async onAliasQuery(alias: string, aliasLocalpart: string) {
-        const res = this.roomAliases.getOptsForAlias(aliasLocalpart);
-        log.info(`Got request to bridge ${aliasLocalpart}`);
-        if (!res) {
-            log.warn(`..but there is no protocol configured to handle it.`);
-            throw Error("Could not match against an alias");
-        }
-        const protocol = res.protocol;
-
-        const properties = Util.sanitizeProperties(res.properties);
         try {
-            // Check if this chat already has a portal and refuse to bridge it.
-            const existing = await this.store.getGroupRoomByRemoteData({
-                properties, // for joining
-                protocol_id: protocol.id,
-            });
-            if (existing) {
-                log.info("Room for", properties, "already exists, not allowing alias.");
-                // Set the alias on the room.
-                const botIntent = this.bridge.getIntent();
-                await botIntent.createAlias(alias, existing.matrix.getId());
+            const res = this.roomAliases.getOptsForAlias(aliasLocalpart);
+            log.info(`Got request to bridge ${aliasLocalpart}`);
+            if (!res) {
+                log.warn(`..but there is no protocol configured to handle it.`);
+                throw Error("Could not match against an alias");
+            }
+            const protocol = res.protocol;
+
+            const properties = Util.sanitizeProperties(res.properties);
+            try {
+                // Check if this chat already has a portal and refuse to bridge it.
+                const existing = await this.store.getGroupRoomByRemoteData({
+                    properties, // for joining
+                    protocol_id: protocol.id,
+                });
+                if (existing) {
+                    log.info("Room for", properties, "already exists, not allowing alias.");
+                    // Set the alias on the room.
+                    const botIntent = this.bridge.getIntent();
+                    await botIntent.createAlias(alias, existing.matrix.getId());
+                    return null;
+                }
+            } catch (ex) {
+                log.error("Failed to query room store for existing rooms:", ex);
+                throw Error("Failed to get room from room store.");
+            }
+
+            if (!await this.purple.checkGroupExists(properties, protocol)) {
+                log.warn(`Protocol reported that ${aliasLocalpart} does not exist, not bridging`);
                 return null;
             }
-        } catch (ex) {
-            log.error("Failed to query room store for existing rooms:", ex);
-            throw Error("Failed to get room from room store.");
-        }
 
-        if(!await this.purple.checkGroupExists(properties, protocol)) {
-            log.warn(`Protocol reported that ${aliasLocalpart} does not exist, not bridging`);
-            return null;
-        }
-
-        log.info(`Creating new room for ${protocol.id} with`, properties);
-        this.pendingRoomAliases.set(alias, {protocol, props: properties});
-        return {
-            creationOpts: {
-                room_alias_name: aliasLocalpart,
-                initial_state: [
-                    {
-                        type: "m.room.join_rules",
-                        content: {
-                            join_rule: "public",
+            log.info(`Creating new room for ${protocol.id} with`, properties);
+            this.pendingRoomAliases.set(alias, { protocol, props: properties });
+            return {
+                creationOpts: {
+                    room_alias_name: aliasLocalpart,
+                    initial_state: [
+                        {
+                            type: "m.room.join_rules",
+                            content: {
+                                join_rule: "public",
+                            },
+                            state_key: "",
                         },
-                        state_key: "",
-                    },
-                ],
-            },
-        };
+                    ],
+                },
+            };
+        } catch (ex) {
+            log.error("onAliasQuery() exception:", ex);
+        }
     }
 
     public async onAliasQueried(alias: string, roomId: string) {
@@ -281,41 +285,45 @@ export class MatrixEventHandler {
                 await this.handleGroupMessage(ctx, event);
             }
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("onEvent() exception:", ex);
         }
     }
 
     public async onTyping(r: Request<TypingEvent>) {
-        const typing = r.getData();
-        const ctx: RoomBridgeStoreEntry = await this.store.getRoomEntryByMatrixId(typing.room_id);
-        if (!ctx) {
-            // Cannot handle a room without typing
-            return;
-        }
-        const roomType: string|null = ctx.matrix?.get("type") || null;
-
-        if (roomType !== MROOM_TYPE_IM) {
-            return;
-        }
-        // We only support this on IM rooms for now.
-        // Assuming only one Matrix user present.
-        log.info(`Handling IM typing for ${typing.room_id}`);
-        if (!ctx.remote) {
-            throw Error('Cannot handle message, remote not defined');
-        }
-        const isUserTyping = !!typing.content.user_ids.filter(u => !this.bridge.getBot().isRemoteUser(u))[0];
-        const matrixUser = ctx.remote.get<string>("matrixUser");
-        let acct: IBifrostAccount;
-        const roomProtocol: string = ctx.remote.get("protocol_id");
         try {
-            acct = (await this.getAccountForMxid(matrixUser, roomProtocol)).acct;
+            const typing = r.getData();
+            const ctx: RoomBridgeStoreEntry = await this.store.getRoomEntryByMatrixId(typing.room_id);
+            if (!ctx) {
+                // Cannot handle a room without typing
+                return;
+            }
+            const roomType: string | null = ctx.matrix ?.get("type") || null;
+
+            if (roomType !== MROOM_TYPE_IM) {
+                return;
+            }
+            // We only support this on IM rooms for now.
+            // Assuming only one Matrix user present.
+            log.info(`Handling IM typing for ${typing.room_id}`);
+            if (!ctx.remote) {
+                throw Error('Cannot handle message, remote not defined');
+            }
+            const isUserTyping = !!typing.content.user_ids.filter(u => !this.bridge.getBot().isRemoteUser(u))[0];
+            const matrixUser = ctx.remote.get<string>("matrixUser");
+            let acct: IBifrostAccount;
+            const roomProtocol: string = ctx.remote.get("protocol_id");
+            try {
+                acct = (await this.getAccountForMxid(matrixUser, roomProtocol)).acct;
+            } catch (ex) {
+                log.error(`Couldn't handle ${matrixUser}'s typing event, ${ex}`);
+                return;
+            }
+            const recipient = ctx.remote.get<string>("recipient");
+            log.debug(`Sending typing to ${recipient}`);
+            acct.sendIMTyping(recipient, isUserTyping);
         } catch (ex) {
-            log.error(`Couldn't handle ${matrixUser}'s typing event, ${ex}`);
-            return;
+            log.error("onTyping() exception:", ex);
         }
-        const recipient = ctx.remote.get<string>("recipient");
-        log.debug(`Sending typing to ${recipient}`);
-        acct.sendIMTyping(recipient, isUserTyping);
     }
 
     /* NOTE: Command handling should really be it's own class, but I am cutting corners.*/
@@ -441,7 +449,7 @@ export class MatrixEventHandler {
                 });
             }
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("handleCommand() exception:", ex);
         }
     }
 
@@ -612,7 +620,7 @@ export class MatrixEventHandler {
                 });
             }
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("handlePlumbingCommand() exception:", ex);
         }
     }
 
@@ -656,7 +664,7 @@ Say \`help\` for more commands.
                 formatted_body: marked(body),
             });*/
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("handleInviteForBot() exception:", ex);
         }
     }
 
@@ -685,7 +693,7 @@ Say \`help\` for more commands.
             });
             return account;
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("handleNewAccount() exception:", ex);
         }
     }
 
@@ -708,7 +716,7 @@ Say \`help\` for more commands.
                 body: "Linked existing account",
             });
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("handleAddExistingAccount() exception:", ex);
         }
     }
 
@@ -727,7 +735,7 @@ Say \`help\` for more commands.
             }
             acct.setEnabled(enable);
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("handleEnableAccount() exception:", ex);
         }
     }
 
@@ -751,7 +759,7 @@ Say \`help\` for more commands.
             msg.origin_id = event.event_id;
             acct.sendIM(recipient, msg);
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("handleImMessage() exception:", ex);
         }
     }
 
@@ -827,7 +835,7 @@ Say \`help\` for more commands.
                 log.error("Couldn't send message to chat:", ex);
             }
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("handleGroupMessage() exception:", ex);
         }
     }
 
@@ -881,7 +889,7 @@ Say \`help\` for more commands.
                 acct.sendChat(roomName, msg);
             }
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("handleRedaction() exception:", ex);
         }
     }
 
@@ -936,7 +944,7 @@ Say \`help\` for more commands.
                 this.deduplicator.decrementRoomUsers(name);
             }
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("handleJoinLeaveGroup() exception:", ex);
         }
     }
 
@@ -956,7 +964,7 @@ Say \`help\` for more commands.
             }
             // XXX: Support state changes for non-gateways
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("handleStateEv() exception:", ex);
         }
     }
 
@@ -989,7 +997,7 @@ Say \`help\` for more commands.
                 acct.acct.joinChat(paramSet);
             }
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("handleJoin() exception:", ex);
         }
     }
 
@@ -1068,11 +1076,11 @@ E.g. \`${command} ${acct.protocol.id}\` ${required.join(" ")} ${optional.join(" 
             log.debug("Parameters for join:", paramSet);
             return paramSet;
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("getJoinParametersForCommand() exception:", ex);
         }
     }
 
-    private joinOrDefer(acct: IBifrostAccount, name: string, properties: IChatJoinProperties): Promise<void> {
+    private joinOrDefer(acct: IBifrostAccount, name: string, properties: IChatJoinProperties) {
         if (!acct.connected) {
             log.debug("Account is not connected, deferring join until connected");
             return new Promise((resolve, reject) => {
@@ -1088,8 +1096,9 @@ E.g. \`${command} ${acct.protocol.id}\` ${required.join(" ")} ${optional.join(" 
                     }
                 };
                 this.purple.on("account-signed-on", cb);
+            }).catch((err) => {
+                log.error("Failed to connect account", err);
             });
-
         } else {
             acct.joinChat(properties);
             acct.setJoinPropertiesForRoom(name, properties);
@@ -1127,7 +1136,7 @@ E.g. \`${command} ${acct.protocol.id}\` ${required.join(" ")} ${optional.join(" 
             }
             return { acct, newAcct: false };
         } catch (ex) {
-            log.error("Event Handler exception:", ex);
+            log.error("getAccountForMxid() exception:", ex);
         }
     }
 }

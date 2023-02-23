@@ -703,40 +703,44 @@ export class XmppJsGateway implements IGateway {
     }
 
     private async updateMatrixMemberListForRoom(chatName: string, room: IGatewayRoom, allowForJoin = false) {
-        if (!allowForJoin && this.members.getMatrixMembers(chatName).length !== 0) {
-            return;
-        }
-        let joined = 0;
-        let left = 0;
-        for (const member of room.membership) {
-            if (member.isRemote) {
-                continue;
+        try {
+            if (!allowForJoin && this.members.getMatrixMembers(chatName).length !== 0) {
+                return;
             }
-            if (member.membership === "join") {
-                joined++;
-                let avatarHash: string = member.avatar_hash;
-                if (avatarHash?.match(REGEXP_MXC)) {
-                    avatarHash = await ProtoHacks.getAvatarHash(member.stateKey, member.avatar_hash, this.bridge.getIntent());
-                    if (avatarHash) {
-                        const idx = room.membership.findIndex((entry) => entry.avatar_hash === member.avatar_hash);
-                        room.membership[idx].avatar_hash = avatarHash;
-                    }
+            let joined = 0;
+            let left = 0;
+            for (const member of room.membership) {
+                if (member.isRemote) {
+                    continue;
                 }
-                this.members.addMatrixMember(
-                    chatName,
-                    member.stateKey,
-                    jid(`${chatName}/${Util.resourcePrep(member.displayname) || member.stateKey}`),
-                    avatarHash,
-                );
-            } else if (member.membership === "leave") {
-                left++;
-                this.members.removeMatrixMember(
-                    chatName,
-                    member.stateKey,
-                );
+                if (member.membership === "join") {
+                    joined++;
+                    let avatarHash: string = member.avatar_hash;
+                    if (avatarHash ?.match(REGEXP_MXC)) {
+                        avatarHash = await ProtoHacks.getAvatarHash(member.stateKey, member.avatar_hash, this.bridge.getIntent());
+                        if (avatarHash) {
+                            const idx = room.membership.findIndex((entry) => entry.avatar_hash === member.avatar_hash);
+                            room.membership[idx].avatar_hash = avatarHash;
+                        }
+                    }
+                    this.members.addMatrixMember(
+                        chatName,
+                        member.stateKey,
+                        jid(`${chatName}/${Util.resourcePrep(member.displayname) || member.stateKey}`),
+                        avatarHash,
+                    );
+                } else if (member.membership === "leave") {
+                    left++;
+                    this.members.removeMatrixMember(
+                        chatName,
+                        member.stateKey,
+                    );
+                }
             }
+            log.info(`Updating membership for ${chatName} ${room.roomId} j:${joined} l:${left}`);
+        } catch (ex) {
+            log.error("updateMatrixMemberListForRoom() exception:", ex);
         }
-        log.info(`Updating membership for ${chatName} ${room.roomId} j:${joined} l:${left}`);
     }
 
     private remoteLeft(stanza: Element) {

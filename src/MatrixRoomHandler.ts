@@ -120,18 +120,22 @@ export class MatrixRoomHandler {
     }
 
     public async onChatJoined(ev: IConversationEvent) {
-        if (this.purple.needsDedupe()) {
-            this.deduplicator.incrementRoomUsers(ev.conv.name);
-        }
+        try {
+            if (this.purple.needsDedupe()) {
+                this.deduplicator.incrementRoomUsers(ev.conv.name);
+            }
 
-        if (this.purple.needsAccountLock()) {
-            let id = Util.createRemoteId(ev.account.protocol_id, ev.account.username);
-            id = `${id}/${ev.conv.name}`;
-            this.accountRoomLock.add(id);
-            setTimeout(() => {
-                log.debug(`AccountLock unlocking ${id}`);
-                this.accountRoomLock.delete(id);
-            }, ACCOUNT_LOCK_MS);
+            if (this.purple.needsAccountLock()) {
+                let id = Util.createRemoteId(ev.account.protocol_id, ev.account.username);
+                id = `${id}/${ev.conv.name}`;
+                this.accountRoomLock.add(id);
+                setTimeout(() => {
+                    log.debug(`AccountLock unlocking ${id}`);
+                    this.accountRoomLock.delete(id);
+                }, ACCOUNT_LOCK_MS);
+            }
+        } catch (ex) {
+            log.error("onChatJoined() exception:", ex);
         }
     }
 
@@ -152,7 +156,7 @@ export class MatrixRoomHandler {
             }
             return null;
         } catch (ex) {
-            log.error("Room Handler exception:", ex);
+            log.error("getIMRoomId() exception:", ex);
         }
     }
 
@@ -205,7 +209,7 @@ export class MatrixRoomHandler {
                 throw ex;
             }
         } catch (ex) {
-            log.error("Room Handler exception:", ex);
+            log.error("createOrGetIMRoom() exception:", ex);
         }
     }
 
@@ -309,7 +313,7 @@ export class MatrixRoomHandler {
                 throw ex;
             }
         } catch (ex) {
-            log.error("Room Handler exception:", ex);
+            log.error("createOrGetGroupChatRoom() exception:", ex);
         }
     }
 
@@ -401,7 +405,7 @@ export class MatrixRoomHandler {
                 });
             }
         } catch (ex) {
-            log.error("Room Handler exception:", ex);
+            log.error("handleIncomingIM() exception:", ex);
         }
     }
 
@@ -504,7 +508,7 @@ export class MatrixRoomHandler {
                 });
             }
         } catch (ex) {
-            log.error("Room Handler exception:", ex);
+            log.error("handleIncomingChatMsg() exception:", ex);
         }
     }
 
@@ -544,7 +548,7 @@ export class MatrixRoomHandler {
             }
             // XXX: Matrix doesn't support invite messages
         } catch (ex) {
-            log.error("Room Handler exception:", ex);
+            log.error("handleChatInvite() exception:", ex);
         }
     }
 
@@ -627,7 +631,7 @@ export class MatrixRoomHandler {
                 log.warn("Failed to apply state change:", ex);
             }
         } catch (ex) {
-            log.error("Room Handler exception:", ex);
+            log.error("handleRemoteUserState() exception:", ex);
         }
     }
 
@@ -658,7 +662,7 @@ export class MatrixRoomHandler {
                 });
             }
         } catch (ex) {
-            log.error("Room Handler exception:", ex);
+            log.error("handleTopic() exception:", ex);
         }
     }
     private async handleRoomAvatar(data: IChatAvatarState) {
@@ -710,7 +714,7 @@ export class MatrixRoomHandler {
                 log.warn("Failed to process avatar ", ex);
             }
         } catch (ex) {
-            log.error("Room Handler exception:", ex);
+            log.error("handleRoomAvatar() exception:", ex);
         }
     }
     private async handleIMTyping(data: IChatTyping) {
@@ -734,7 +738,7 @@ export class MatrixRoomHandler {
             ).userId);
             await intent.sendTyping(roomId, data.typing);
         } catch (ex) {
-            log.error("Room Handler exception:", ex);
+            log.error("handleIMTyping() exception:", ex);
         }
     }
 
@@ -752,7 +756,7 @@ export class MatrixRoomHandler {
             const roomId = await this.createOrGetGroupChatRoom(data, intent, true);
             await intent.sendTyping(roomId, data.typing);
         } catch (ex) {
-            log.error("Room Handler exception:", ex);
+            log.error("handleChatTyping() exception:", ex);
         }
     }
 
@@ -776,7 +780,7 @@ export class MatrixRoomHandler {
             await intent.sendReadReceipt(roomId, eventId);
             log.debug(`Updated read reciept for ${userId} in ${roomId}`);
         } catch (ex) {
-            log.error("Room Handler exception:", ex);
+            log.error("handleReadReceipt() exception:", ex);
         }
     }
 
