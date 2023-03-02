@@ -215,69 +215,73 @@ export class GatewayHandler {
     }
 
     private async handleRoomJoin(data: IGatewayJoin) {
-        // Attempt to join the user, and create the room mapping if successful.
-        if (!this.purple.gateway) {
-            throw Error("Cannot handle gateway join because gateway is not setup");
-        }
-        const protocol = this.purple.getProtocol(data.protocol_id)!;
-        const intentUser = this.purple.gateway.getMxidForRemote(data.sender);
-        log.info(`${intentUser} is attempting to join ${data.roomAlias}`);
-        const intent = this.bridge.getIntent(intentUser);
-        let roomId: string|null = null;
-        let room: RoomBridgeStoreEntry|undefined;
         try {
-            if (this.config.getRoomRule(data.roomAlias) === "deny") {
-                throw Error("This room has been denied");
+            // Attempt to join the user, and create the room mapping if successful.
+            if (!this.purple.gateway) {
+                throw Error("Cannot handle gateway join because gateway is not setup");
             }
-            await intent.ensureRegistered();
-            if (this.config.tuning.waitOnProfileBeforeSend) {
-                await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
+            const protocol = this.purple.getProtocol(data.protocol_id)!;
+            const intentUser = this.purple.gateway.getMxidForRemote(data.sender);
+            log.info(`${intentUser} is attempting to join ${data.roomAlias}`);
+            const intent = this.bridge.getIntent(intentUser);
+            let roomId: string | null = null;
+            let room: RoomBridgeStoreEntry | undefined;
+            try {
+                if (this.config.getRoomRule(data.roomAlias) === "deny") {
+                    throw Error("This room has been denied");
+                }
+                await intent.ensureRegistered();
+                if (this.config.tuning.waitOnProfileBeforeSend) {
+                    await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
+                }
+                log.info(`Attempting to join ${data.roomAlias}`)
+                roomId = await intent.join(data.roomAlias);
+                if (this.config.getRoomRule(roomId) === "deny") {
+                    throw Error("This room has been denied");
+                }
+                if (!this.config.tuning.waitOnProfileBeforeSend) {
+                    await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
+                }
+                if (data.nick) {
+                    // Set the user's displayname in the room to their nickname.
+                    // Do this after a short delay, so that we don't have a race on
+                    // the server setting the global displayname.
+                    setTimeout(
+                        async () => {
+                            await intent.setRoomUserProfile(roomId, { displayname: data.nick }).catch((err) => {
+                                log.warn("Failed to set room user profile on join:", err);
+                            });
+                        },
+                        1000,
+                    );
+                }
+                room = await this.getOrCreateGatewayRoom(data, roomId);
+                const canonAlias = room.remote ?.get<IChatJoinProperties>("properties").room_alias;
+                if (canonAlias !== data.roomAlias) {
+                    throw Error(
+                        "We do not support multiple room aliases, try " + canonAlias,
+                    );
+                }
+                const vroom = await this.getVirtualRoom(roomId, intent);
+                if (!vroom) {
+                    throw Error(`Failed to gather Virtual Room ${data.roomAlias} -> ${roomId}`);
+                }
+                await this.purple.gateway.onRemoteJoin(null, data.join_id, vroom, intentUser);
+            } catch (ex) {
+                const roomName = room ?.remote ?.get<string>("room_name");
+                // If the user is already in the room (e.g. XMPP member with a second device), don't part them.
+                const alreadyInRoom = roomName && this.purple.gateway.memberInRoom(roomName, intentUser);
+                if (roomId && !alreadyInRoom) {
+                    intent.leave(roomId).catch((err) => {
+                        log.error("Failed to part user after failing to join:", err);
+                    });
+                }
+                log.warn("Failed to join room:", ex.message);
+                this.roomIdCache.delete(roomId); // invalidate cache
+                await this.purple.gateway.onRemoteJoin(ex.message, data.join_id, undefined, undefined);
             }
-            log.info(`Attempting to join ${data.roomAlias}`)
-            roomId = await intent.join(data.roomAlias);
-            if (this.config.getRoomRule(roomId) === "deny") {
-                throw Error("This room has been denied");
-            }
-            if (!this.config.tuning.waitOnProfileBeforeSend) {
-                await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
-            }
-            if (data.nick) {
-                // Set the user's displayname in the room to their nickname.
-                // Do this after a short delay, so that we don't have a race on
-                // the server setting the global displayname.
-                setTimeout(
-                    async () => {
-                        await intent.setRoomUserProfile(roomId, { displayname: data.nick }).catch((err) => {
-                            log.warn("Failed to set room user profile on join:", err);
-                        });
-                    },
-                    1000,
-                );
-            }
-            room = await this.getOrCreateGatewayRoom(data, roomId);
-            const canonAlias = room.remote?.get<IChatJoinProperties>("properties").room_alias;
-            if (canonAlias !== data.roomAlias) {
-                throw Error(
-                    "We do not support multiple room aliases, try " + canonAlias,
-                );
-            }
-            const vroom = await this.getVirtualRoom(roomId, intent);
-            if (!vroom) {
-                throw Error(`Failed to gather Virtual Room ${data.roomAlias} -> ${roomId}`);
-            }
-            await this.purple.gateway.onRemoteJoin(null, data.join_id, vroom, intentUser);
         } catch (ex) {
-            const roomName = room?.remote?.get<string>("room_name");
-            // If the user is already in the room (e.g. XMPP member with a second device), don't part them.
-            const alreadyInRoom = roomName && this.purple.gateway.memberInRoom(roomName, intentUser);
-            if (roomId && !alreadyInRoom) {
-                intent.leave(roomId).catch((err) => {
-                    log.error("Failed to part user after failing to join:", err);
-                });
-            }
-            log.warn("Failed to join room:", ex.message);
-            this.roomIdCache.delete(roomId); // invalidate cache
-            await this.purple.gateway.onRemoteJoin(ex.message, data.join_id, undefined, undefined);
+            log.error("handleRoomJoin() Exception:", ex);
         }
     }
 
