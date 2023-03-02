@@ -138,7 +138,7 @@ export class MatrixEventHandler {
 
             let membershipEvent: MatrixMembershipEvent | undefined;
 
-            if (event.type === "m.room.member" && event.state_key ?.length && typeof event.content.membership === "string") {
+            if (event.type === "m.room.member" && event.state_key?.length && typeof event.content.membership === "string") {
                 membershipEvent = event as MatrixMembershipEvent;
             }
 
@@ -147,7 +147,7 @@ export class MatrixEventHandler {
             }
 
             const roomType: string | null = ctx.matrix ? ctx.matrix.get("type") : null;
-            const newInvite = !roomType && membershipEvent ?.content.membership === "invite";
+            const newInvite = !roomType && membershipEvent?.content.membership === "invite";
             log.debug("Got event (id, type, sender, state_key, roomtype):", event.event_id, event.type, event.sender, event.state_key, roomType);
             const bridgeBot = this.bridge.getBot();
             const botUserId = bridgeBot.getUserId();
@@ -227,7 +227,7 @@ export class MatrixEventHandler {
             if (
                 event.type === "m.room.message" &&
                     event.content.msgtype === "m.text" &&
-                    body ?.startsWith("!bifrost")) {
+                    body?.startsWith("!bifrost")) {
                 // It's probably a room waiting to be given commands.
                 if (this.config.provisioning.enablePlumbing) {
                     const args = body.split(" ");
@@ -249,7 +249,7 @@ export class MatrixEventHandler {
             }
 
             // Validate room entries
-            const roomProtocol = roomType ? ctx.remote ?.get<string>("protocol_id") : undefined;
+            const roomProtocol = roomType ? ctx.remote?.get<string>("protocol_id") : undefined;
             if (!roomProtocol) {
                 log.debug("Room protocol was null, we cannot handle this event!");
                 return;
@@ -297,7 +297,7 @@ export class MatrixEventHandler {
                 // Cannot handle a room without typing
                 return;
             }
-            const roomType: string | null = ctx.matrix ?.get("type") || null;
+            const roomType: string | null = ctx.matrix?.get("type") || null;
 
             if (roomType !== MROOM_TYPE_IM) {
                 return;
@@ -382,6 +382,8 @@ export class MatrixEventHandler {
                     await intent.sendMessage(event.room_id, {
                         msgtype: "m.notice",
                         body: "Failed to add account: " + err.message,
+                    }).catch((err) => {
+                        log.error("Failed to send handleCommand() notice:", err);
                     });
                 }
             } else if (args[0] === "accounts" && ["enable", "disable"].includes(args[1])) {
@@ -395,6 +397,8 @@ export class MatrixEventHandler {
                     await intent.sendMessage(event.room_id, {
                         msgtype: "m.notice",
                         body: "Failed to enable account:" + err.message,
+                    }).catch((err) => {
+                        log.error("Failed to send handleCommand() notice:", err);
                     });
                 }
             } else if (args[0] === "accounts" && args[1] === "add-existing" && !soloProtocol) {
@@ -404,6 +408,8 @@ export class MatrixEventHandler {
                     await intent.sendMessage(event.room_id, {
                         msgtype: "m.notice",
                         body: "Failed to enable account:" + err.message,
+                    }).catch((err) => {
+                        log.error("Failed to send handleCommand() notice:", err);
                     });
                 }
                 // Syntax: join [protocol] opts...
@@ -414,6 +420,8 @@ export class MatrixEventHandler {
                     await intent.sendMessage(event.room_id, {
                         msgtype: "m.notice",
                         body: "Failed to join chat:" + err.message,
+                    }).catch((err) => {
+                        log.error("Failed to send handleCommand() notice:", err);
                     });
                 }
             } else if (args[0] === "help") {
@@ -523,7 +531,7 @@ export class MatrixEventHandler {
                         try {
                             const userIds = Object.keys(await this.bridge.getBot().getJoinedMembers(event.room_id));
                             await Promise.all(userIds.map(async (userId) => {
-                                if (this.bridge ?.getBot().getUserId() === userId) {
+                                if (this.bridge?.getBot().getUserId() === userId) {
                                     return; // Don't join the bridge bot.
                                 }
                                 log.info(`Joining ${userId} to ${remoteId}`);
@@ -540,6 +548,8 @@ export class MatrixEventHandler {
                             await intent.sendMessage(event.room_id, {
                                 msgtype: "m.notice",
                                 body: "Successfully plumbed room " + event.room_id,
+                            }).catch((err) => {
+                                log.error("Failed to send handlePlumbingCommand() notice:", err);
                             });
                         }
                     }
@@ -583,17 +593,22 @@ export class MatrixEventHandler {
                                     });
                                 }
                             }
-                        }));
+                        })).catch((err) => {
+                            log.error("Exception while removing puppet:", err);
+                        });
                     } catch (ex) {
                         log.error("Failed to unbridge room:", ex);
                     } finally {
                         await intent.sendMessage(event.room_id, {
                             msgtype: "m.notice",
                             body: "Successfully unbridged " + room_id,
+                        }).catch((err) => {
+                            log.error("Failed to send handlePlumbingCommand() notice:", err);
                         });
                         await this.store.removeRoomByRoomId(room_id);
-                        intent.leave(room_id);
-
+                        intent.leave(room_id).catch((err) => {
+                            log.error("Failed to part room while unbridging:", err);
+                        });
                     }
                 } else if (args[1] === "self-deop") {
                     let room_id: string = event.room_id;
@@ -609,6 +624,8 @@ export class MatrixEventHandler {
                         await intent.sendMessage(event.room_id, {
                             msgtype: "m.notice",
                             body: "Successfully self-deopped into " + room_id,
+                        }).catch((err) => {
+                            log.error("Failed to send handlePlumbingCommand() notice:", err);
                         });
                     }
                 }
@@ -617,6 +634,8 @@ export class MatrixEventHandler {
                 await intent.sendMessage(event.room_id, {
                     msgtype: "m.notice",
                     body: "Error while handling command:" + ex,
+                }).catch((err) => {
+                    log.error("Failed to send handlePlumbingCommand() notice:", err);
                 });
             }
         } catch (ex) {
@@ -685,9 +704,9 @@ Say \`help\` for more commands.
                 throw new Error("You need to specify a password");
             }
             const account = this.purple.createBifrostAccount(args[0], protocol);
-            account.createNew(args[1], this.config.purple.defaultAccountSettings ?.[protocol.id] || {});
+            account.createNew(args[1], this.config.purple.defaultAccountSettings?.[protocol.id] || {});
             await this.store.storeAccount(event.sender, protocol, account.name);
-            await this.bridge ?.getIntent().sendMessage(event.room_id, {
+            await this.bridge?.getIntent().sendMessage(event.room_id, {
                 msgtype: "m.notice",
                 body: "Created new account",
             });
@@ -711,7 +730,7 @@ Say \`help\` for more commands.
                 throw Error("Protocol was not found");
             }
             await this.store.storeAccount(event.sender, protocol, name);
-            await this.bridge ?.getIntent().sendMessage(event.room_id, {
+            await this.bridge?.getIntent().sendMessage(event.room_id, {
                 msgtype: "m.notice",
                 body: "Linked existing account",
             });
@@ -799,7 +818,7 @@ Say \`help\` for more commands.
                     const membership = state.find((ev) =>
                         ev.type === "m.room.member" && ev.state_key === event.sender && ev.content.membership === "join"
                     );
-                    if (membership ?.content.displayname) {
+                    if (membership?.content.displayname) {
                         props.handle = membership.content.displayname as string;
                     }
                     await this.joinOrDefer(acct, roomName, props);
@@ -872,7 +891,7 @@ Say \`help\` for more commands.
                 let originalSender: string;
                 if (!recipient) {
                     const originalEvent = await this.bridge.getIntent().getEvent(event.room_id, event.redacts as string) as WeakEvent;
-                    originalSender = originalEvent ?.sender;
+                    originalSender = originalEvent?.sender;
                 }
                 acct = (await this.getAccountForMxid(originalSender || event.sender, roomProtocol)).acct;
             } catch (ex) {
