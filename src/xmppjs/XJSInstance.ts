@@ -131,18 +131,22 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     }
 
     public xmppWriteToStream(xmlMsg: any) {
-        let xml = typeof (xmlMsg) === "string" ? xmlMsg : xmlMsg.xml;
-        if (!xml) {
-            // it's an element
-            xml = xmlMsg.toString();
+        try {
+            let xml = typeof (xmlMsg) === "string" ? xmlMsg : xmlMsg.xml;
+            if (!xml) {
+                // it's an element
+                xml = xmlMsg.toString();
+            }
+            if (this.canWrite) {
+                return this.xmpp.write(xml);
+            }
+            const p = new Promise((resolve) => {
+                this.bufferedMessages.push({ xmlMsg: xml, resolve });
+            });
+            return p;
+        } catch (ex) {
+            log.error("Failed to write to the XMPP Stream:", ex);
         }
-        if (this.canWrite) {
-            return this.xmpp.write(xml);
-        }
-        const p = new Promise((resolve) => {
-            this.bufferedMessages.push({xmlMsg: xml, resolve});
-        });
-        return p;
     }
 
     public xmppSendBulk(xmlMsgs: IStza[]): Promise<unknown> {
@@ -319,8 +323,12 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 if (!this.canWrite) {
                     return;
                 }
-                const msg = this.bufferedMessages.splice(0, 1)[0];
-                msg.resolve(this.xmpp.write(msg.xmlMsg));
+                try {
+                    const msg = this.bufferedMessages.splice(0, 1)[0];
+                    msg.resolve(this.xmpp.write(msg.xmlMsg));
+                } catch (ex) {
+                    log.error("Failed to write on stream while flushing message buffer:", ex);
+                }
             }
         });
 
