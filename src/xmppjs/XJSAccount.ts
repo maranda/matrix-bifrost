@@ -187,7 +187,10 @@ export class XmppJsAccount implements IBifrostAccount {
         );
         Metrics.remoteCall("xmpp.iq.ping");
         try {
-            await this.xmpp.sendIq(pingStanza);
+            const res = await this.xmpp.sendIq(pingStanza) as Element;
+            if (res.getChild("error")) {
+                return false;
+            }
             return true;
         }
         catch (ex) {

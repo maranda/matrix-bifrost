@@ -104,10 +104,12 @@ export class Util {
 
     public static resourcePrep(resource: string|unknown): string|null {
         try {
-            return stringprep.resourceprep(resource);
+            if (typeof (resource) === "string") {
+                return stringprep.resourceprep(resource);
+            }
         } catch (ex) {
             log.error(`Encountered error while resource prepping: ${ex}`);
-            return null;
         }
+        return null;
     }
 }

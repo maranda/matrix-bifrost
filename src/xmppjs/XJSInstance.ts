@@ -199,16 +199,15 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 const timeout = setTimeout(() => reject(Error("Timeout")), timeoutMs);
                 this.once("iq." + stza.id, (stanza: Element) => {
                     clearTimeout(timeout);
-                    const error = stanza.getChild("error");
-                    if (error) {
-                        reject({ error, stanza });
+                    if (stanza.getChild("error")) {
+                        reject(stanza);
                     }
                     resolve(stanza);
                 });
             }).catch((ex) => {
                 if (ex instanceof Error) {
                     log.error("sendIQ() Promise Exception:", ex);
-                } else {
+                } else if (ex instanceof Element) {
                     return ex;
                 }
             });
@@ -549,7 +548,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 const timeout = setTimeout(() => reject(Error("Timeout")), 5000);
                 this.once(`iq.${id}`, (stanza: Element) => {
                     clearTimeout(timeout);
-                    const vCard = (stanza.getChild("vCard") as unknown as Element);
+                    const vCard = (stanza.getChild("vCard") as Element);
                     if (vCard) {
                         resolve(vCard);
                     }
@@ -597,7 +596,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             }
             this.once(`iq.${id}`, (stanza: Element) => {
                 clearTimeout(timeout);
-                const vCard = (stanza.getChild("vCard") as unknown as Element);
+                const vCard = (stanza.getChild("vCard") as Element);
                 if (vCard) {
                     resolve(vCard);
                 }
@@ -699,7 +698,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             try {
                 const result = await this.sendIq(new StzaIqDiscoInfo(this.myAddress.toString(), to, id, "get")) as Element;
                 log.debug(`Found ${to}`);
-                const isMuc = result.getChild("query") ?.getChildByAttr("var", "http://jabber.org/protocol/muc");
+                const isMuc = result.getChild("query")?.getChildByAttr("var", "http://jabber.org/protocol/muc");
                 if (isMuc) {
                     this.checkMUCCache.set(to, true);
                 } else {
