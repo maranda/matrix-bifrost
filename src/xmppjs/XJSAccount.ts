@@ -5,6 +5,7 @@ import { IBifrostAccount, IChatJoinOptions } from "../bifrost/Account";
 import { IBifrostInstance } from "../bifrost/Instance";
 import { BifrostProtocol } from "../bifrost/Protocol";
 import { jid, JID } from "@xmpp/jid";
+import { Element } from "@xmpp/xml";
 import { IBasicProtocolMessage } from "../MessageFormatter";
 import { Metrics } from "../Metrics";
 import { Logging } from "matrix-appservice-bridge";
@@ -404,7 +405,7 @@ export class XmppJsAccount implements IBifrostAccount {
 
     public async getAvatarBuffer(iconPath: string, senderId: string): Promise<{type: string, data: Buffer}> {
         log.info(`Fetching avatar for ${senderId} (hash: ${iconPath})`);
-        const vCard = await this.xmpp.getVCard(senderId);
+        const vCard = await this.xmpp.getVCard(senderId) as Element;
         const photo = vCard.getChild("PHOTO");
         if (!photo) {
             throw Error("No PHOTO in vCard given");

@@ -640,7 +640,7 @@ export class XmppJsGateway implements IGateway {
         let nickname = j.resource || j.local;
         let photo: string|undefined;
         try {
-            const res = await this.xmpp.getVCard(who);
+            const res = await this.xmpp.getVCard(who) as Element;
             nickname = res.getChild("NICKNAME")?.getText() || nickname;
             const photoElement = res.getChild("PHOTO");
             if (photoElement) {

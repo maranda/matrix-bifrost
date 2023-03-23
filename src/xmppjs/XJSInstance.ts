@@ -190,13 +190,13 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         return p;
     }
 
-    public async sendIq(stza: StzaBase, timeoutMs = 10000): Promise<Element> {
+    public async sendIq(stza: StzaBase, timeoutMs = 10000) {
         try {
             if (stza.type !== "iq") {
                 throw Error("Stanza type must be of type IQ");
             }
-            const p: Promise<Element> = new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => reject(new Error("timeout")), timeoutMs);
+            const p = new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error("Timeout")), timeoutMs);
                 this.once("iq." + stza.id, (stanza: Element) => {
                     clearTimeout(timeout);
                     const error = stanza.getChild("error");
@@ -205,6 +205,8 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                     }
                     resolve(stanza);
                 });
+            }).catch((ex) => {
+                log.error("sendIQ() Promise Exception:", ex);
             });
             await this.xmppSend(stza);
             Metrics.remoteCall("xmpp.iq");
@@ -530,12 +532,12 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         return body;
     }
 
-    private async getMucAvatar(room: string): Promise<Element> {
+    private async getMucAvatar(room: string) {
         try {
             const id = uuid();
             // check if MUC supports avatars
-            const result = await this.sendIq(new StzaIqDiscoInfo(this.myAddress.toString(), room, uuid(), "get"));
-            const supportVCards = result.getChild("query") ?.getChildByAttr("var", "vcard-temp");
+            const result = await this.sendIq(new StzaIqDiscoInfo(this.myAddress.toString(), room, uuid(), "get")) as Element;
+            const supportVCards = result.getChild("query")?.getChildByAttr("var", "vcard-temp");
             if (!supportVCards) {
                 throw Error("MUC doesn't support avatars");
             }
@@ -549,6 +551,8 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                     }
                     reject(Error("Room has no avatar"));
                 });
+            }).catch((ex) => {
+                log.error("getMucAvatar() Promise Exception:", ex);
             });
             log.info(`Fetching MUC Avatar of ${room}`);
             await this.xmppSend(
@@ -561,7 +565,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         }
     }
 
-    public async getVCard(who: string, sender?: string): Promise<Element> {
+    public async getVCard(who: string, sender?: string) {
         const id = uuid();
         const whoJid = jid(who);
         who = Util.prepJID(whoJid);
@@ -595,6 +599,8 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 }
                 reject(Error("No vCard given"));
             });
+        }).catch((ex) => {
+            log.error("getVCard() Promise Exception:", ex);
         });
         log.info(`Fetching vCard for ${who}`);
         await this.xmppSend(
@@ -687,7 +693,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             const id = uuid();
             log.info(`Checking if ${to} is a MUC`);
             try {
-                const result = await this.sendIq(new StzaIqDiscoInfo(this.myAddress.toString(), to, id, "get"));
+                const result = await this.sendIq(new StzaIqDiscoInfo(this.myAddress.toString(), to, id, "get")) as Element;
                 log.debug(`Found ${to}`);
                 const isMuc = result.getChild("query") ?.getChildByAttr("var", "http://jabber.org/protocol/muc");
                 if (isMuc) {
@@ -898,7 +904,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             } as IChatTopicState);
             // HACK, when we set the topic we also attempt setting the room avatar
             try {
-                const mucAvatar = await this.getMucAvatar(convName);
+                const mucAvatar = await this.getMucAvatar(convName) as Element;
                 const photo = mucAvatar.getChild("PHOTO");
                 const binval = photo!.getChildText("BINVAL");
                 if (binval) {
