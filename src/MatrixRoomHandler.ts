@@ -53,28 +53,32 @@ export class MatrixRoomHandler {
             purple.on("chat-joined", this.onChatJoined.bind(this));
         }
         purple.on("chat-joined-new", async (ev: IChatJoined) => {
-            log.info("Handling joining of new chat", ev.account.username, ev.conv, ev.join_properties);
-            const matrixUser = await this.store.getMatrixUserForAccount(ev.account);
-            if (!matrixUser) {
-                log.warn("Got a joined chat for an account not tied to a matrix user. WTF?");
-                return;
-            }
-            if (!this.bridge) {
-                log.warn("Got chat-joined-new but bridge was not defined yet");
-                return;
-            }
-            const intent = this.bridge.getIntent();
-            const roomId = await this.createOrGetGroupChatRoom(ev, intent);
-            if (!ev.should_invite) {
-                // Not all backends need to invite users to their rooms.
-                return false;
-            }
-            const memberlist = Object.keys((await this.bridge.getBot().getJoinedMembers(roomId)));
-            if (!memberlist.includes(matrixUser.getId())) {
-                log.debug(`Invited ${matrixUser.getId()} to a chat they tried to join`);
-                await intent.invite(roomId, matrixUser.getId()).catch((err) => {
-                    log.error(`Failed to invite user ${matrixUser.getId()} into ${roomId}`);
-                });
+            try {
+                log.info("Handling joining of new chat", ev.account.username, ev.conv, ev.join_properties);
+                const matrixUser = await this.store.getMatrixUserForAccount(ev.account);
+                if (!matrixUser) {
+                    log.warn("Got a joined chat for an account not tied to a matrix user. WTF?");
+                    return;
+                }
+                if (!this.bridge) {
+                    log.warn("Got chat-joined-new but bridge was not defined yet");
+                    return;
+                }
+                const intent = this.bridge.getIntent();
+                const roomId = await this.createOrGetGroupChatRoom(ev, intent);
+                if (!ev.should_invite) {
+                    // Not all backends need to invite users to their rooms.
+                    return false;
+                }
+                const memberlist = Object.keys((await this.bridge.getBot().getJoinedMembers(roomId)));
+                if (!memberlist.includes(matrixUser.getId())) {
+                    log.debug(`Invited ${matrixUser.getId()} to a chat they tried to join`);
+                    await intent.invite(roomId, matrixUser.getId()).catch((err) => {
+                        log.error(`Failed to invite user ${matrixUser.getId()} into ${roomId}`);
+                    });
+                }
+            } catch (ex) {
+                log.error("Exception while handling chat-joined-new event:", ex);
             }
         });
         purple.on("received-im-msg", this.handleIncomingIM.bind(this));
@@ -89,15 +93,19 @@ export class MatrixRoomHandler {
         purple.on("im-typing", this.handleIMTyping.bind(this));
         purple.on("chat-typing", this.handleChatTyping.bind(this));
         purple.on("store-remote-user", (storeUser: IStoreRemoteUser) => {
-            log.info(`Storing remote ghost for ${storeUser.mxId} -> ${storeUser.remoteId}`);
-            this.store.storeGhost(
-                storeUser.mxId,
-                this.purple.getProtocol(storeUser.protocol_id)!,
-                storeUser.remoteId,
-                storeUser.data,
-            );
-            if (!this.alreadyKnownSenders.has(storeUser.remoteId)) {
-                this.alreadyKnownSenders.add(storeUser.remoteId);
+            try {
+                log.info(`Storing remote ghost for ${storeUser.mxId} -> ${storeUser.remoteId}`);
+                this.store.storeGhost(
+                    storeUser.mxId,
+                    this.purple.getProtocol(storeUser.protocol_id)!,
+                    storeUser.remoteId,
+                    storeUser.data,
+                );
+                if (!this.alreadyKnownSenders.has(storeUser.remoteId)) {
+                    this.alreadyKnownSenders.add(storeUser.remoteId);
+                }
+            } catch (ex) {
+                log.error("Exception while handling store-remote-user event:", ex);
             }
         });
         this.remoteEventIdMapping = new Map();

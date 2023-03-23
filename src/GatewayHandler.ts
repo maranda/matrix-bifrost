@@ -342,35 +342,39 @@ export class GatewayHandler {
     }
 
     private async getOrCreateGatewayRoom(data: IGatewayJoin, roomId: string): Promise<RoomBridgeStoreEntry> {
-        const remoteId = Buffer.from(
-            `${data.protocol_id}:${data.room_name}`,
-        ).toString("base64");
-        // Check if we have bridged this already.
-        const exists = (await this.store.getRoomEntryByMatrixId(roomId));
-        if (exists && !exists.remote?.get<boolean>("gateway")) {
-            const roomName = exists.remote?.get<string>("room_name");
-            throw Error(`This room is already bridged to ${roomName}`);
+        try {
+            const remoteId = Buffer.from(
+                `${data.protocol_id}:${data.room_name}`,
+            ).toString("base64");
+            // Check if we have bridged this already.
+            const exists = (await this.store.getRoomEntryByMatrixId(roomId));
+            if (exists && !exists.remote ?.get<boolean>("gateway")) {
+                const roomName = exists.remote ?.get<string>("room_name");
+                throw Error(`This room is already bridged to ${roomName}`);
+            }
+
+            const existingRoom = await this.store.getGroupRoomByRemoteData({
+                protocol_id: data.protocol_id,
+                room_name: data.room_name,
+            });
+
+            if (existingRoom) {
+                return existingRoom;
+            }
+
+            const newRoom = this.store.storeRoom(roomId, MROOM_TYPE_GROUP, remoteId, {
+                protocol_id: data.protocol_id,
+                type: MROOM_TYPE_GROUP,
+                room_name: data.room_name,
+                gateway: true,
+                properties: {
+                    room_id: roomId,
+                    room_alias: data.roomAlias,
+                },
+            } as IRemoteGroupData);
+            return newRoom;
+        } catch (ex) {
+            log.error("getOrCreateGatewayRoom() Exception:", ex);
         }
-
-        const existingRoom = await this.store.getGroupRoomByRemoteData({
-            protocol_id: data.protocol_id,
-            room_name: data.room_name,
-        });
-
-        if (existingRoom) {
-            return existingRoom;
-        }
-
-        const newRoom = this.store.storeRoom(roomId, MROOM_TYPE_GROUP, remoteId, {
-            protocol_id: data.protocol_id,
-            type: MROOM_TYPE_GROUP,
-            room_name: data.room_name,
-            gateway: true,
-            properties: {
-                room_id: roomId,
-                room_alias: data.roomAlias,
-            },
-        } as IRemoteGroupData);
-        return newRoom;
     }
 }
