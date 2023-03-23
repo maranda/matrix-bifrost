@@ -196,7 +196,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                 throw Error("Stanza type must be of type IQ");
             }
             const p = new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => reject(new Error("Timeout")), timeoutMs);
+                const timeout = setTimeout(() => reject(Error("Timeout")), timeoutMs);
                 this.once("iq." + stza.id, (stanza: Element) => {
                     clearTimeout(timeout);
                     const error = stanza.getChild("error");
@@ -206,7 +206,11 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                     resolve(stanza);
                 });
             }).catch((ex) => {
-                log.error("sendIQ() Promise Exception:", ex);
+                if (ex instanceof Error) {
+                    log.error("sendIQ() Promise Exception:", ex);
+                } else {
+                    return ex;
+                }
             });
             await this.xmppSend(stza);
             Metrics.remoteCall("xmpp.iq");
