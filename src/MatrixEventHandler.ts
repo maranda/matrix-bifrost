@@ -955,7 +955,7 @@ Say \`help\` for more commands.
                 if (event.content.displayname) {
                     props.handle = event.content.displayname;
                 }
-                this.joinOrDefer(acct, name, props);
+                await this.joinOrDefer(acct, name, props);
             } else if (membership === "leave") {
                 await acct.rejectChat(props);
                 this.deduplicator.removeChosenOne(name, acct.remoteId);
@@ -1099,7 +1099,7 @@ E.g. \`${command} ${acct.protocol.id}\` ${required.join(" ")} ${optional.join(" 
         }
     }
 
-    private joinOrDefer(acct: IBifrostAccount, name: string, properties: IChatJoinProperties) {
+    private async joinOrDefer(acct: IBifrostAccount, name: string, properties: IChatJoinProperties) {
         if (!acct.connected) {
             log.debug("Account is not connected, deferring join until connected");
             return new Promise((resolve, reject) => {
@@ -1119,7 +1119,7 @@ E.g. \`${command} ${acct.protocol.id}\` ${required.join(" ")} ${optional.join(" 
                 log.error("Failed to connect account", err);
             });
         } else {
-            acct.joinChat(properties);
+            await acct.joinChat(properties);
             acct.setJoinPropertiesForRoom(name, properties);
             return Promise.resolve();
         }
