@@ -84,46 +84,48 @@ export class RoomSync {
             const rooms = await this.store.getRoomsOfType(MROOM_TYPE_GROUP);
             log.info(`Got ${rooms.length} group rooms`);
             await Promise.all(rooms.map(async (room) => {
-                if (!room.matrix) {
-                    log.warn(`Not syncing entry because it has no matrix component`);
-                    return;
-                }
-                const roomId = room.matrix.getId();
-                if (!room.remote) {
-                    log.warn(`Not syncing ${roomId} because it has no remote links`);
-                    return;
-                }
-                const protocolId = room.remote.get<string>("protocol_id");
-                if (!this.bifrost.getProtocol(protocolId)) {
-                    log.debug(`Not syncing ${roomId} because the purple backend doesn't support this protocol`);
-                    return;
-                }
-                const isGateway = room.remote.get<boolean>("gateway");
-                if (isGateway) {
-                    // The gateway handler syncs via roomState.
-                    this.gateway.initialMembershipSync(room);
-                    return;
-                }
-                let members: { [userId: string]: { display_name: string } };
                 try {
-                    members = await this.getJoinedMembers(bot, roomId);
+                    if (!room.matrix) {
+                        log.warn(`Not syncing entry because it has no matrix component`);
+                        return;
+                    }
+                    const roomId = room.matrix.getId();
+                    if (!room.remote) {
+                        log.warn(`Not syncing ${roomId} because it has no remote links`);
+                        return;
+                    }
+                    const protocolId = room.remote.get<string>("protocol_id");
+                    if (!this.bifrost.getProtocol(protocolId)) {
+                        log.debug(`Not syncing ${roomId} because the purple backend doesn't support this protocol`);
+                        return;
+                    }
+                    const isGateway = room.remote.get<boolean>("gateway");
+                    if (isGateway) {
+                        // The gateway handler syncs via roomState.
+                        this.gateway.initialMembershipSync(room);
+                        return;
+                    }
+                    let members: { [userId: string]: { display_name: string } };
+                    try {
+                        members = await this.getJoinedMembers(bot, roomId);
+                    } catch (ex) {
+                        log.warn(`Not syncing ${roomId} because we could not get room members: ${ex}`);
+                        return;
+                    }
+                    const userIds = Object.keys(members);
+                    for (const userId of userIds) {
+                        // Never sync the bot user.
+                        if (bot.getUserId() === userId) {
+                            continue;
+                        }
+                        if (!bot.isRemoteUser(userId)) {
+                            await this.syncMatrixUser(userId, roomId, room.remote, members[userId].display_name);
+                        }
+                    }
                 } catch (ex) {
-                    log.warn(`Not syncing ${roomId} because we could not get room members: ${ex}`);
-                    return;
+                    log.error("syncAccountsToGroupRooms() Loop Exception:", ex);
                 }
-                const userIds = Object.keys(members);
-                for (const userId of userIds) {
-                    // Never sync the bot user.
-                    if (bot.getUserId() === userId) {
-                        continue;
-                    }
-                    if (!bot.isRemoteUser(userId)) {
-                        await this.syncMatrixUser(userId, roomId, room.remote, members[userId].display_name);
-                    }
-                }
-            })).catch((ex) => {
-                log.error("syncAccountsToGroupRooms() Loop Exception:", ex);
-            });
+            }));
         } catch (ex) {
             log.error("syncAccountsToGroupRooms() Exception:", ex);
         }
