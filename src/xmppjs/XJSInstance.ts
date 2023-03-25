@@ -319,9 +319,11 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             log.info(`flushing ${this.bufferedMessages.length} buffered messages`);
             if (this.connectionWasDropped) {
                 log.warn("Connection was dropped, attempting reconnect..");
-                this.presenceCache.clear();
-                for (const account of this.accounts.values()) {
-                    account.reconnectToRooms();
+                if (this.config.tuning.forceReconnectRooms) {
+                    this.presenceCache.clear();
+                    for (const account of this.accounts.values()) {
+                        account.reconnectToRooms();
+                    }
                 }
             }
             while (this.bufferedMessages.length) {
