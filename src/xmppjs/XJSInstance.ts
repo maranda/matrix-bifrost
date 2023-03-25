@@ -165,29 +165,33 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
      *
      * @param xmlMsg The XML stanza or string to send
      */
-    public xmppSend(xmlMsg: IStza|string): Promise<unknown> {
-        const xml = typeof(xmlMsg) === "string" ? xmlMsg : xmlMsg.xml;
-        let p: Promise<unknown>;
-        if (this.canWrite) {
-            this.xmpp.write(xml).catch((err: Error) => {
-                // This should only happen in case of a connection error
-                // that xmpp.js hasn't noticed yet for some reason.
-                // xmpp.js recovers from these automatically,
-                // so we can reschedule this for post-connection and hope it goes through then.
-                log.error("Error writing xmpp stanza:", err.toString(), "scheduling it for later");
-                p = new Promise((resolve) => {
-                    this.bufferedMessages.push({xmlMsg: xml, resolve});
+    public xmppSend(xmlMsg: IStza | string): Promise<unknown> {
+        try {
+            const xml = typeof (xmlMsg) === "string" ? xmlMsg : xmlMsg.xml;
+            let p: Promise<unknown>;
+            if (this.canWrite) {
+                this.xmpp.write(xml).catch((err: Error) => {
+                    // This should only happen in case of a connection error
+                    // that xmpp.js hasn't noticed yet for some reason.
+                    // xmpp.js recovers from these automatically,
+                    // so we can reschedule this for post-connection and hope it goes through then.
+                    log.error("Error writing xmpp stanza:", err.toString(), "scheduling it for later");
+                    p = new Promise((resolve) => {
+                        this.bufferedMessages.push({ xmlMsg: xml, resolve });
+                    });
                 });
-            });
-        } else {
-            p = new Promise((resolve) => {
-                this.bufferedMessages.push({xmlMsg: xml, resolve});
-            });
+            } else {
+                p = new Promise((resolve) => {
+                    this.bufferedMessages.push({ xmlMsg: xml, resolve });
+                });
+            }
+            if (typeof (xmlMsg) !== "string") {
+                Metrics.remoteCall(`xmpp.${xmlMsg.type}`);
+            }
+            return p;
+        } catch (ex) {
+            log.error("xmppSend() Exception:", ex);
         }
-        if (typeof(xmlMsg) !== "string") {
-            Metrics.remoteCall(`xmpp.${xmlMsg.type}`);
-        }
-        return p;
     }
 
     public async sendIq(stza: StzaBase, timeoutMs = 10000) {
