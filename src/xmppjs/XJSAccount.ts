@@ -176,7 +176,7 @@ export class XmppJsAccount implements IBifrostAccount {
         return res.online;
     }
 
-    public async selfPing(to: string): Promise<boolean> {
+    public async selfPing(to: string, timeoutMs: number = 60000): Promise<boolean> {
         const id = uuid();
         log.debug(`Self-pinging ${to}`);
         const pingStanza = new StzaIqPing(
@@ -187,7 +187,7 @@ export class XmppJsAccount implements IBifrostAccount {
         );
         Metrics.remoteCall("xmpp.iq.ping");
         try {
-            const res = await this.xmpp.sendIq(pingStanza) as Element;
+            const res = await this.xmpp.sendIq(pingStanza, timeoutMs) as Element;
             if (res.getChild("error")) {
                 return false;
             }
@@ -202,12 +202,14 @@ export class XmppJsAccount implements IBifrostAccount {
         log.info("Recovering rooms for", this.remoteId);
         this.roomHandles.forEach(async (handle, fullRoomName) => {
             try {
-                log.debug("Rejoining", fullRoomName);
-                await this.joinChat({
-                    handle: handle,
-                    fullRoomName: fullRoomName,
-                    avatar_hash: this.avatarHash,
-                });
+                if (!await this.selfPing(`${fullRoomName}/${handle}`, 240000)) {
+                    log.debug("Rejoining", fullRoomName);
+                    await this.joinChat({
+                        handle: handle,
+                        fullRoomName: fullRoomName,
+                        avatar_hash: this.avatarHash
+                    }, this.xmpp, 240000, true, false);
+                }
             } catch (ex) {
                 log.warn(`Failed to rejoin ${fullRoomName}`, ex);
             }
@@ -238,7 +240,8 @@ export class XmppJsAccount implements IBifrostAccount {
         components: IChatJoinProperties,
         instance?: IBifrostInstance,
         timeout: number = 60000,
-        setWaiting: boolean = true)
+        setWaiting: boolean = true,
+        selfPing: boolean = true)
         : Promise<IConversationEvent|void> {
         if (!components.fullRoomName && (!components.room || !components.server)) {
             throw Error("Missing fullRoomName OR room|server");
@@ -279,7 +282,7 @@ export class XmppJsAccount implements IBifrostAccount {
                 };
             }
         }
-        if (await this.selfPing(to)) {
+        if (selfPing && await this.selfPing(to)) {
             log.info(`Didn't join ${to} from ${from}, self ping says we are joined`);
             this.roomHandles.set(roomName, components.handle);
             this.roomNicks.add(to);

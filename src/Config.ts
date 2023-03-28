@@ -68,7 +68,7 @@ export class Config {
     };
 
     public readonly tuning: IConfigTuning = {
-        forceReconnectRooms: false,
+        forceReconnectRooms: true,
         limitStateChanges: true,
         waitOnProfileBeforeSend: true,
         conferencePMFallbackCheck: false,

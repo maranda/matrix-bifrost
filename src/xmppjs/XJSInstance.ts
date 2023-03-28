@@ -324,7 +324,6 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             if (this.connectionWasDropped) {
                 log.warn("Connection was dropped, attempting reconnect..");
                 if (this.config.tuning.forceReconnectRooms) {
-                    this.presenceCache.clear();
                     for (const account of this.accounts.values()) {
                         account.reconnectToRooms();
                     }
