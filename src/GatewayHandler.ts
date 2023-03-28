@@ -36,8 +36,7 @@ const HISTORY_SAFE_ENUMS = ['shared', 'world_readable'];
  * for XMPP.js).
  */
 export class GatewayHandler {
-    private aliasCache: Map<string, IGatewayRoom> = new Map();
-    private roomIdCache: Map<string, Promise<IGatewayRoom>> = new Map();
+    private roomIdCache: Map<string, IGatewayRoom> = new Map();
 
     constructor(
         private purple: IBifrostInstance,
@@ -54,58 +53,50 @@ export class GatewayHandler {
         purple.on("gateway-publicrooms", this.handlePublicRooms.bind(this));
     }
 
-    private async populateAvatarHashes(roomId: string, membership: any, intent: Intent) {
-        log.info(`Populating avatar hashes from mxc URLs for ${roomId} members`);
-        let res = membership.slice();
-        for (const [idx, member] of membership.entries()) {
-            if (typeof(member.avatar_hash) === "string") {
-                let entry = res[idx];
-                entry.avatar_hash = await ProtoHacks.getAvatarHash(member.stateKey, member.avatar_hash, intent);
-            }
-        }
-        return res;
-    }
-
     public async getVirtualRoom(roomId: string, intent: Intent): Promise<IGatewayRoom> {
         const existingRoom = this.roomIdCache.get(roomId);
         if (existingRoom) {
+            log.debug(`Fetching room ${roomId} from Room Cache -> '${existingRoom.name}' - '${existingRoom.membership.length}'`);
             return existingRoom;
         }
         const promise = (async () => {
-            log.debug(`Getting state for ${roomId}`);
-            const state = await intent.roomState(roomId);
-            log.debug(`Got state for ${roomId}`);
-            const encryptedEv = state.find((e) => e.type === "m.room.encrypted");
-            if (encryptedEv) {
-                throw Error("Bridging of encrypted rooms is not supported");
-            }
-            const nameEv = state.find((e) => e.type === "m.room.name");
-            const topicEv = state.find((e) => e.type === "m.room.topic");
-            const historyVis = state.find((e) => e.type === "m.room.history_visibility");
-            const bot = this.bridge.getBot();
-            let membership = state.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
-                {
-                    isRemote: bot.isRemoteUser(e.sender),
-                    stateKey: e.state_key,
-                    displayname: e.content.displayname,
-                    avatar_hash: e.content.avatar_url,
-                    sender: e.sender,
-                    membership: e.content.membership,
+            try {
+                log.debug(`Getting state for ${roomId}`);
+                const state = await intent.roomState(roomId);
+                log.debug(`Got state for ${roomId}`);
+                const encryptedEv = state.find((e) => e.type === "m.room.encrypted");
+                if (encryptedEv) {
+                    throw Error("Bridging of encrypted rooms is not supported");
                 }
-            ))
-            membership = await this.populateAvatarHashes(roomId, membership, intent);
-            const room: IGatewayRoom = {
-                // Default to private
-                allowHistory: HISTORY_SAFE_ENUMS.includes(historyVis?.content?.history_visibility || 'joined'),
-                name: nameEv ? nameEv.content.name : "",
-                topic: topicEv ? topicEv.content.topic : "",
-                roomId,
-                membership,
-            };
-            log.debug(`Hydrated room ${roomId} '${room.name}' '${room.topic}' ${room.membership.length} `);
-            return room;
+                const nameEv = state.find((e) => e.type === "m.room.name");
+                const topicEv = state.find((e) => e.type === "m.room.topic");
+                const historyVis = state.find((e) => e.type === "m.room.history_visibility");
+                const bot = this.bridge.getBot();
+                let membership = state.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
+                    {
+                        isRemote: bot.isRemoteUser(e.sender),
+                        stateKey: e.state_key,
+                        displayname: e.content.displayname,
+                        avatar_hash: e.content.avatar_url,
+                        sender: e.sender,
+                        membership: e.content.membership,
+                    }
+                ));
+                const room: IGatewayRoom = {
+                    // Default to private
+                    allowHistory: HISTORY_SAFE_ENUMS.includes(historyVis ?.content ?.history_visibility || 'joined'),
+                    name: nameEv ? nameEv.content.name : "",
+                    topic: topicEv ? topicEv.content.topic : "",
+                    roomId,
+                    membership,
+                };
+                log.info(`Hydrated room ${roomId} '${room.name}' '${room.topic}' -> Membership: ${room.membership.length}`);
+                this.roomIdCache.set(roomId, room);
+                return room;
+            } catch (ex) {
+                log.error("Failed to Hydrate Virtual Room:", ex);
+            }
         })();
-        this.roomIdCache.set(roomId, promise);
         return promise;
     }
 
@@ -117,8 +108,12 @@ export class GatewayHandler {
         if (!context.matrix) {
             return;
         }
-        const room = await this.getVirtualRoom(context.matrix.getId(), this.bridge.getIntent());
-        this.purple.gateway.sendMatrixMessage(chatName, sender, body, room);
+        try {
+            const room = await this.getVirtualRoom(context.matrix.getId(), this.bridge.getIntent());
+            this.purple.gateway.sendMatrixMessage(chatName, sender, body, room);
+        } catch (ex) {
+            log.error("Failed to send matrix message:", ex);
+        }
     }
 
     public async sendStateEvent(chatName: string, sender: string, ev: any , context: RoomBridgeStoreEntry) {
@@ -128,19 +123,23 @@ export class GatewayHandler {
         if (!context.matrix) {
             return;
         }
-        const room = await this.getVirtualRoom(context.matrix.getId(), this.bridge.getIntent());
-        if (ev.type === "m.room.name") {
-            log.info("Handing room name change for gateway");
-            room.name = ev.content.name;
-            this.purple.gateway.sendStateChange(chatName, sender, "name", room);
-        } else if (ev.type === "m.room.topic") {
-            log.info("Handing room topic change for gateway");
-            room.topic = ev.content.topic;
-            this.purple.gateway.sendStateChange(chatName, sender, "topic", room);
-        } else if (ev.type === "m.room.avatar") {
-            log.info("Handing room avatar change for gateway");
-            room.avatar = await ProtoHacks.getAvatarHash(context.matrix.getId(), ev.content.url, this.bridge.getIntent());
-            this.purple.gateway.sendStateChange(chatName, sender, "avatar", room);
+        try {
+            const room = await this.getVirtualRoom(context.matrix.getId(), this.bridge.getIntent());
+            if (ev.type === "m.room.name") {
+                log.info("Handing room name change for gateway");
+                room.name = ev.content.name;
+                this.purple.gateway.sendStateChange(chatName, sender, "name", room);
+            } else if (ev.type === "m.room.topic") {
+                log.info("Handing room topic change for gateway");
+                room.topic = ev.content.topic;
+                this.purple.gateway.sendStateChange(chatName, sender, "topic", room);
+            } else if (ev.type === "m.room.avatar") {
+                log.info("Handing room avatar change for gateway");
+                room.avatar = await ProtoHacks.getAvatarHash(context.matrix.getId(), ev.content.url, this.bridge.getIntent());
+                this.purple.gateway.sendStateChange(chatName, sender, "avatar", room);
+            }
+        } catch (ex) {
+            log.error("Failed to send state event:", ex);
         }
     }
 
@@ -153,41 +152,45 @@ export class GatewayHandler {
         if (!context.matrix) {
             return;
         }
-        let rename: boolean = false;
-        const intent = this.bridge.getIntent();
-        const room = await this.getVirtualRoom(context.matrix.getId(), intent);
-        if (this.bridge.getBot().isRemoteUser(event.state_key)) {
-            // This might be a kick or ban.
-            log.info(`Forwarding remote membership for ${event.state_key} in ${chatName}`);
-            this.purple.gateway.sendMatrixMembership(chatName, event, room);
-            return;
-        }
-        const existingMembership = room.membership.find((ev) => ev.stateKey === event.state_key);
-        if (existingMembership) {
-            if (existingMembership.membership === event.content.membership) {
-                if (existingMembership.displayname !== event.content.displayname) {
-                    rename = true;
-                    this.purple.gateway.sendMatrixMembership(chatName, event, room, rename);
-                } else {
-                    return;
-                }
+        try {
+            let rename: boolean = false;
+            const intent = this.bridge.getIntent();
+            const room = await this.getVirtualRoom(context.matrix.getId(), intent);
+            if (this.bridge.getBot().isRemoteUser(event.state_key)) {
+                // This might be a kick or ban.
+                log.info(`Forwarding remote membership for ${event.state_key} in ${chatName}`);
+                this.purple.gateway.sendMatrixMembership(chatName, event, room);
+                return;
             }
-            existingMembership.membership = event.content.membership;
-            existingMembership.displayname = event.content.displayname;
-        } else {
-            const hash = typeof (event.content.avatar_url) === "string" ? await ProtoHacks.getAvatarHash(
-                event.state_key, event.content.avatar_url, intent) : null;
-            room.membership.push({
-                membership: event.content.membership,
-                sender: event.sender,
-                displayname: event.content.displayname,
-                avatar_hash: hash,
-                stateKey: event.state_key,
-                isRemote: false,
-            });
+            const existingMembership = room.membership.find((ev) => ev.stateKey === event.state_key);
+            if (existingMembership) {
+                if (existingMembership.membership === event.content.membership) {
+                    if (existingMembership.displayname !== event.content.displayname) {
+                        rename = true;
+                        this.purple.gateway.sendMatrixMembership(chatName, event, room, rename);
+                    } else {
+                        return;
+                    }
+                }
+                existingMembership.membership = event.content.membership;
+                existingMembership.displayname = event.content.displayname;
+            } else {
+                const hash = typeof (event.content.avatar_url) === "string" ? await ProtoHacks.getAvatarHash(
+                    event.state_key, event.content.avatar_url, intent) : null;
+                room.membership.push({
+                    membership: event.content.membership,
+                    sender: event.sender,
+                    displayname: event.content.displayname,
+                    avatar_hash: hash,
+                    stateKey: event.state_key,
+                    isRemote: false,
+                });
+            }
+            log.info(`Updating membership for ${event.state_key} in ${chatName} ${room.roomId}`);
+            this.purple.gateway.sendMatrixMembership(chatName, event, room);
+        } catch (ex) {
+            log.error("Failed to send matrix membership:", ex);
         }
-        log.info(`Updating membership for ${event.state_key} in ${chatName} ${room.roomId}`);
-        this.purple.gateway.sendMatrixMembership(chatName, event, room);
     }
 
     public async initialMembershipSync(roomEntry: RoomBridgeStoreEntry) {
@@ -195,79 +198,90 @@ export class GatewayHandler {
             log.debug("Not rejoining remote user, gateway not enabled");
             return;
         }
-        const roomName = roomEntry.remote.get<string>("room_name");
-        const room = await this.getVirtualRoom(roomEntry.matrix.getId(), this.bridge.getIntent());
-        const remoteGhosts: BifrostRemoteUser[] = [];
-        for (const ghost of room.membership.filter((m) => m.isRemote && m.membership === "join")) {
-            const user = (await this.store.getRemoteUsersFromMxId(ghost.stateKey))[0];
-            if (user && user.extraData) {
-                remoteGhosts.push(user);
+        try {
+            const roomName = roomEntry.remote.get<string>("room_name");
+            const room = await this.getVirtualRoom(roomEntry.matrix.getId(), this.bridge.getIntent());
+            const remoteGhosts: BifrostRemoteUser[] = [];
+            for (const ghost of room.membership.filter((m) => m.isRemote && m.membership === "join")) {
+                const user = (await this.store.getRemoteUsersFromMxId(ghost.stateKey))[0];
+                if (user && user.extraData) {
+                    remoteGhosts.push(user);
+                }
             }
+            await this.purple.gateway.initialMembershipSync(roomName, room, remoteGhosts);
+        } catch (ex) {
+            log.error("Failed Initial Membership Sync:", ex);
         }
-        this.purple.gateway.initialMembershipSync(roomName, room, remoteGhosts);
     }
 
     private async handleRoomJoin(data: IGatewayJoin) {
-        // Attempt to join the user, and create the room mapping if successful.
-        if (!this.purple.gateway) {
-            throw Error("Cannot handle gateway join because gateway is not setup");
-        }
-        const protocol = this.purple.getProtocol(data.protocol_id)!;
-        const intentUser = this.purple.gateway.getMxidForRemote(data.sender);
-        log.info(`${intentUser} is attempting to join ${data.roomAlias}`);
-        const intent = this.bridge.getIntent(intentUser);
-        let roomId: string|null = null;
-        let room: RoomBridgeStoreEntry|undefined;
         try {
-            if (this.config.getRoomRule(data.roomAlias) === "deny") {
-                throw Error("This room has been denied");
+            // Attempt to join the user, and create the room mapping if successful.
+            if (!this.purple.gateway) {
+                throw Error("Cannot handle gateway join because gateway is not setup");
             }
-            await intent.ensureRegistered();
-            if (this.config.tuning.waitOnProfileBeforeSend) {
-                await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
+            const protocol = this.purple.getProtocol(data.protocol_id)!;
+            const intentUser = this.purple.gateway.getMxidForRemote(data.sender);
+            log.info(`${intentUser} is attempting to join ${data.roomAlias}`);
+            const intent = this.bridge.getIntent(intentUser);
+            let roomId: string | null = null;
+            let room: RoomBridgeStoreEntry | undefined;
+            try {
+                if (this.config.getRoomRule(data.roomAlias) === "deny") {
+                    throw Error("This room has been denied");
+                }
+                await intent.ensureRegistered();
+                if (this.config.tuning.waitOnProfileBeforeSend) {
+                    await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
+                }
+                log.info(`Attempting to join ${data.roomAlias}`)
+                roomId = await intent.join(data.roomAlias);
+                if (this.config.getRoomRule(roomId) === "deny") {
+                    throw Error("This room has been denied");
+                }
+                if (!this.config.tuning.waitOnProfileBeforeSend) {
+                    await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
+                }
+                if (data.nick) {
+                    // Set the user's displayname in the room to their nickname.
+                    // Do this after a short delay, so that we don't have a race on
+                    // the server setting the global displayname.
+                    setTimeout(
+                        async () => {
+                            await intent.setRoomUserProfile(roomId, { displayname: data.nick }).catch((err) => {
+                                log.warn("Failed to set room user profile on join:", err);
+                            });
+                        },
+                        1000,
+                    );
+                }
+                room = await this.getOrCreateGatewayRoom(data, roomId);
+                const canonAlias = room.remote ?.get<IChatJoinProperties>("properties").room_alias;
+                if (canonAlias !== data.roomAlias) {
+                    throw Error(
+                        "We do not support multiple room aliases, try " + canonAlias,
+                    );
+                }
+                const vroom = await this.getVirtualRoom(roomId, intent);
+                if (!vroom) {
+                    throw Error(`Failed to gather Virtual Room ${data.roomAlias} -> ${roomId}`);
+                }
+                await this.purple.gateway.onRemoteJoin(null, data.join_id, vroom, intentUser);
+            } catch (ex) {
+                const roomName = room ?.remote ?.get<string>("room_name");
+                // If the user is already in the room (e.g. XMPP member with a second device), don't part them.
+                const alreadyInRoom = roomName && this.purple.gateway.memberInRoom(roomName, intentUser);
+                if (roomId && !alreadyInRoom) {
+                    intent.leave(roomId).catch((err) => {
+                        log.error("Failed to part user after failing to join:", err);
+                    });
+                }
+                log.warn("Failed to join room:", ex.message);
+                this.roomIdCache.delete(roomId); // invalidate cache
+                await this.purple.gateway.onRemoteJoin(ex.message, data.join_id, undefined, undefined);
             }
-            log.info(`Attempting to join ${data.roomAlias}`)
-            roomId = await intent.join(data.roomAlias);
-            if (this.config.getRoomRule(roomId) === "deny") {
-                throw Error("This room has been denied");
-            }
-            if (!this.config.tuning.waitOnProfileBeforeSend) {
-                await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
-            }
-            if (data.nick) {
-                // Set the user's displayname in the room to their nickname.
-                // Do this after a short delay, so that we don't have a race on
-                // the server setting the global displayname.
-                setTimeout(
-                    async () => {
-                        await intent.setRoomUserProfile(roomId, { displayname: data.nick }).catch((err) => {
-                            log.warn("Failed to set room user profile on join:", err);
-                        });
-                    },
-                    1000,
-                );
-            }
-            room = await this.getOrCreateGatewayRoom(data, roomId);
-            const canonAlias = room.remote?.get<IChatJoinProperties>("properties").room_alias;
-            if (canonAlias !== data.roomAlias) {
-                throw Error(
-                    "We do not support multiple room aliases, try " + canonAlias,
-                );
-            }
-            const vroom = await this.getVirtualRoom(roomId, intent);
-            await this.purple.gateway.onRemoteJoin(null, data.join_id, vroom, intentUser);
         } catch (ex) {
-            const roomName = room?.remote?.get<string>("room_name");
-            // If the user is already in the room (e.g. XMPP member with a second device), don't part them.
-            const alreadyInRoom = roomName && this.purple.gateway.memberInRoom(roomName, intentUser);
-            if (roomId && !alreadyInRoom) {
-                intent.leave(roomId).catch((err) => {
-                    log.error("Failed to part user after failing to join:", err);
-                });
-            }
-            log.warn("Failed to join room:", ex.message);
-            this.roomIdCache.delete(roomId);
-            await this.purple.gateway.onRemoteJoin(ex.message, data.join_id, undefined, undefined);
+            log.error("handleRoomJoin() Exception:", ex);
         }
     }
 
@@ -304,7 +318,7 @@ export class GatewayHandler {
         }
     }
 
-    private async handlePublicRooms(ev: IGatewayPublicRoomsQuery) {
+     private async handlePublicRooms(ev: IGatewayPublicRoomsQuery) {
         log.info(`Trying to discover public rooms search=${ev.searchString} homeserver=${ev.homeserver}`);
         try {
             // XXX: We should check to see if the room exists in our cache.
@@ -328,35 +342,39 @@ export class GatewayHandler {
     }
 
     private async getOrCreateGatewayRoom(data: IGatewayJoin, roomId: string): Promise<RoomBridgeStoreEntry> {
-        const remoteId = Buffer.from(
-            `${data.protocol_id}:${data.room_name}`,
-        ).toString("base64");
-        // Check if we have bridged this already.
-        const exists = (await this.store.getRoomEntryByMatrixId(roomId));
-        if (exists && !exists.remote?.get<boolean>("gateway")) {
-            const roomName = exists.remote?.get<string>("room_name");
-            throw Error(`This room is already bridged to ${roomName}`);
+        try {
+            const remoteId = Buffer.from(
+                `${data.protocol_id}:${data.room_name}`,
+            ).toString("base64");
+            // Check if we have bridged this already.
+            const exists = (await this.store.getRoomEntryByMatrixId(roomId));
+            if (exists && !exists.remote ?.get<boolean>("gateway")) {
+                const roomName = exists.remote ?.get<string>("room_name");
+                throw Error(`This room is already bridged to ${roomName}`);
+            }
+
+            const existingRoom = await this.store.getGroupRoomByRemoteData({
+                protocol_id: data.protocol_id,
+                room_name: data.room_name,
+            });
+
+            if (existingRoom) {
+                return existingRoom;
+            }
+
+            const newRoom = this.store.storeRoom(roomId, MROOM_TYPE_GROUP, remoteId, {
+                protocol_id: data.protocol_id,
+                type: MROOM_TYPE_GROUP,
+                room_name: data.room_name,
+                gateway: true,
+                properties: {
+                    room_id: roomId,
+                    room_alias: data.roomAlias,
+                },
+            } as IRemoteGroupData);
+            return newRoom;
+        } catch (ex) {
+            log.error("getOrCreateGatewayRoom() Exception:", ex);
         }
-
-        const existingRoom = await this.store.getGroupRoomByRemoteData({
-            protocol_id: data.protocol_id,
-            room_name: data.room_name,
-        });
-
-        if (existingRoom) {
-            return existingRoom;
-        }
-
-        const newRoom = this.store.storeRoom(roomId, MROOM_TYPE_GROUP, remoteId, {
-            protocol_id: data.protocol_id,
-            type: MROOM_TYPE_GROUP,
-            room_name: data.room_name,
-            gateway: true,
-            properties: {
-                room_id: roomId,
-                room_alias: data.roomAlias,
-            },
-        } as IRemoteGroupData);
-        return newRoom;
     }
 }

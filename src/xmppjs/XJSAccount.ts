@@ -1,22 +1,23 @@
 import { IChatJoinProperties,
-    IUserInfo, IConversationEvent, IChatJoined, IAccountMinimal, IStoreRemoteUser, ICleanDoppleganger } from "../bifrost/Events";
+    IUserInfo, IConversationEvent, IChatJoined, IAccountMinimal, IStoreRemoteUser } from "../bifrost/Events";
 import { XmppJsInstance, XMPP_PROTOCOL } from "./XJSInstance";
 import { IBifrostAccount, IChatJoinOptions } from "../bifrost/Account";
 import { IBifrostInstance } from "../bifrost/Instance";
 import { BifrostProtocol } from "../bifrost/Protocol";
-import { Element, x } from "@xmpp/xml";
 import { jid, JID } from "@xmpp/jid";
+import { Element } from "@xmpp/xml";
 import { IBasicProtocolMessage } from "../MessageFormatter";
 import { Metrics } from "../Metrics";
 import { Logging } from "matrix-appservice-bridge";
 import { v4 as uuid } from "uuid";
 import { XHTMLIM } from "./XHTMLIM";
 import { StzaMessage, StzaIqPing, StzaPresenceJoin, StzaPresencePart, StzaIqVcardRequest } from "./Stanzas";
+import { Util } from "../Util";
 
 const IDPREFIX = "bifrost";
 const CONFLICT_SUFFIX = "[m]";
-const LASTSTANZA_CHECK_MS = 2 * 60000;
-const LASTSTANZA_MAXDURATION = 10 * 60000;
+const LASTSTANZA_CHECK_MS = 3 * 60000;
+const LASTSTANZA_MAXDURATION = 12 * 60000;
 const log = Logging.get("XmppJsAccount");
 
 export class XmppJsAccount implements IBifrostAccount {
@@ -40,7 +41,6 @@ export class XmppJsAccount implements IBifrostAccount {
     public readonly roomNicks: Set<string>;
     private readonly pmSessions: Set<string>;
     private avatarHash?: string;
-    private cleanedDG: number;
     private lastStanzaTs: Map<string, number>;
     private checkInterval: NodeJS.Timeout;
     constructor(
@@ -53,7 +53,6 @@ export class XmppJsAccount implements IBifrostAccount {
         this.roomNicks = new Set();
         this.waitingToJoin = new Set();
         this.pmSessions = new Set();
-        this.cleanedDG = 0;
         this.lastStanzaTs = new Map();
         this.checkInterval = setInterval(() => {
             this.lastStanzaTs.forEach((ts, roomName) => {
@@ -82,6 +81,9 @@ export class XmppJsAccount implements IBifrostAccount {
                                 handle: this.roomHandles.get(roomName) || handle,
                                 avatar_hash: this.avatarHash,
                             });
+                        } else {
+                            log.warn(`couldn't find a handler or nick for ${this.remoteId} and failed to rejoin removing self ping`);
+                            this.lastStanzaTs.delete(roomName);
                         }
                     });
                 }
@@ -174,7 +176,7 @@ export class XmppJsAccount implements IBifrostAccount {
         return res.online;
     }
 
-    public async selfPing(to: string): Promise<boolean> {
+    public async selfPing(to: string, timeoutMs: number = 60000): Promise<boolean> {
         const id = uuid();
         log.debug(`Self-pinging ${to}`);
         const pingStanza = new StzaIqPing(
@@ -185,7 +187,10 @@ export class XmppJsAccount implements IBifrostAccount {
         );
         Metrics.remoteCall("xmpp.iq.ping");
         try {
-            await this.xmpp.sendIq(pingStanza);
+            const res = await this.xmpp.sendIq(pingStanza, timeoutMs) as Element;
+            if (res.getChild("error")) {
+                return false;
+            }
             return true;
         }
         catch (ex) {
@@ -197,12 +202,14 @@ export class XmppJsAccount implements IBifrostAccount {
         log.info("Recovering rooms for", this.remoteId);
         this.roomHandles.forEach(async (handle, fullRoomName) => {
             try {
-                log.debug("Rejoining", fullRoomName);
-                await this.joinChat({
-                    handle: handle,
-                    fullRoomName: fullRoomName,
-                    avatar_hash: this.avatarHash,
-                });
+                if (!await this.selfPing(`${fullRoomName}/${handle}`, 240000)) {
+                    log.debug("Rejoining", fullRoomName);
+                    await this.joinChat({
+                        handle: handle,
+                        fullRoomName: fullRoomName,
+                        avatar_hash: this.avatarHash
+                    }, this.xmpp, 240000, true, false);
+                }
             } catch (ex) {
                 log.warn(`Failed to rejoin ${fullRoomName}`, ex);
             }
@@ -217,7 +224,6 @@ export class XmppJsAccount implements IBifrostAccount {
                 throw new Error("User has no assigned handle for this room, we cannot rejoin!");
             }
             // we need to clean handles before attempting to rejoin
-            this.cleanedDG = 0;
             this.roomHandles.delete(fullRoomName);
             this.roomNicks.delete(`${fullRoomName}/${handle}`);
             await this.joinChat({
@@ -234,7 +240,8 @@ export class XmppJsAccount implements IBifrostAccount {
         components: IChatJoinProperties,
         instance?: IBifrostInstance,
         timeout: number = 60000,
-        setWaiting: boolean = true)
+        setWaiting: boolean = true,
+        selfPing: boolean = true)
         : Promise<IConversationEvent|void> {
         if (!components.fullRoomName && (!components.room || !components.server)) {
             throw Error("Missing fullRoomName OR room|server");
@@ -243,15 +250,13 @@ export class XmppJsAccount implements IBifrostAccount {
             throw Error("Missing handle");
         }
         const roomName = components.fullRoomName || `${components.room}@${components.server}`;
-        const to = `${roomName}/${components.handle}`;
+        let to = `${roomName}/${components.handle}`;
         const from = `${this.remoteId}/${this.resource}`;
         log.debug(`joinChat:`, this.remoteId, components);
         if (this.isInRoom(roomName)) {
             const currentHandle = this.roomHandles.get(roomName);
             if (currentHandle !== components.handle) {
                 log.debug(`Leaving ${to} with old puppet ${currentHandle}`);
-                this.cleanedDG = 0;
-                this.cleanDG(to, roomName);
                 await this.rejectChat(
                     {
                         fullRoomName: components.fullRoomName,
@@ -259,9 +264,12 @@ export class XmppJsAccount implements IBifrostAccount {
                         server: components.server,
                     } as IChatJoinProperties
                 );
+                if (!Util.resourcePrep(components.handle)) {
+                    components.handle = this.mxId;
+                    to = `${roomName}/${components.handle}`;
+                }
             } else {
                 log.debug(`Didn't join ${to} from ${from}, already joined`);
-                this.cleanDG(to, roomName);
                 return {
                     eventName: "already-joined",
                     account: {
@@ -274,11 +282,10 @@ export class XmppJsAccount implements IBifrostAccount {
                 };
             }
         }
-        if (await this.selfPing(to)) {
+        if (selfPing && await this.selfPing(to)) {
             log.info(`Didn't join ${to} from ${from}, self ping says we are joined`);
             this.roomHandles.set(roomName, components.handle);
             this.roomNicks.add(to);
-            this.cleanDG(to, roomName);
             return {
                 eventName: "already-joined",
                 account: {
@@ -312,7 +319,6 @@ export class XmppJsAccount implements IBifrostAccount {
                     if (data.conv.name === roomName) {
                         this.waitingToJoin.delete(roomName);
                         log.info(`Got ack for join ${roomName}`);
-                        this.cleanDG(to, roomName);
                         clearTimeout(timer);
                         this.xmpp.removeListener("chat-joined", cb);
                         resolve(data);
@@ -405,7 +411,7 @@ export class XmppJsAccount implements IBifrostAccount {
 
     public async getAvatarBuffer(iconPath: string, senderId: string): Promise<{type: string, data: Buffer}> {
         log.info(`Fetching avatar for ${senderId} (hash: ${iconPath})`);
-        const vCard = await this.xmpp.getVCard(senderId);
+        const vCard = await this.xmpp.getVCard(senderId) as Element;
         const photo = vCard.getChild("PHOTO");
         if (!photo) {
             throw Error("No PHOTO in vCard given");
@@ -428,17 +434,5 @@ export class XmppJsAccount implements IBifrostAccount {
     public sendIMTyping() {
         // No-op
         return;
-    }
-
-    private cleanDG(to: string, roomName: string) {
-        if (this.cleanedDG >= 10) {
-            return;
-        }
-        this.xmpp.emit("clean-remote-doppleganger", {
-            sender: to,
-            protocol: this.xmpp.getProtocol(XMPP_PROTOCOL.id),
-            roomName,
-        } as ICleanDoppleganger);
-        this.cleanedDG++;
     }
 }

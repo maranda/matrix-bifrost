@@ -68,6 +68,7 @@ export class Config {
     };
 
     public readonly tuning: IConfigTuning = {
+        forceReconnectRooms: true,
         limitStateChanges: true,
         waitOnProfileBeforeSend: true,
         conferencePMFallbackCheck: false,
@@ -163,6 +164,10 @@ interface IConfigLogging {
 }
 
 interface IConfigTuning {
+    // Rooms would be mostly agnostic of a component disconnection if we manage to reconnect
+    // fast enough so it's pointless to fully rebuild room state, as that will possibly also
+    // overload the xmpp server on a high scale
+    forceReconnectRooms: boolean;
     // Limit state changes Matrix side only for plumbed/portal rooms to joins, kicks and bans
     limitStateChanges: boolean;
     // Don't send a message or join a room before setting a profile picture

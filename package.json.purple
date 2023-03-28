@@ -74,6 +74,9 @@
     "ts-node": "^10.1.0",
     "typescript": "^4.3.5"
   },
+  "optionalDependencies": {
+    "node-purple": "git+https://github.com/matrix-org/node-purple#8ad1572d544d9b5e5add446626a37903b4576c11"
+  },
   "nyc": {
     "check-coverage": true,
     "per-file": false,

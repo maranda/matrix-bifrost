@@ -1,0 +1,1 @@
+Perform STRINGPREP on XMPP nicknames for MUCs

@@ -45,6 +45,8 @@ export class Deduplicator {
         return new Promise<void>((resolve, reject) => {
             this.waitJoinList.set(`${roomId}:${userId}`, resolve);
             timeout = setTimeout(() => reject("Wait for join timeout expired"), timeoutMs);
+        }).catch((err) => {
+            log.error("waitForJoin() Exception:", err);
         }).then(() => {
             clearTimeout(timeout);
         });

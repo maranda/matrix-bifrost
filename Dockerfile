@@ -1,5 +1,5 @@
 # Build node-purple. We need buster for python3.6, which is needed for node-purple
-FROM node:14-buster as builder
+FROM node:16-buster as builder
 COPY ./package.json ./package.json
 COPY ./yarn.lock ./yarn.lock
 COPY ./src ./src
@@ -8,10 +8,10 @@ COPY ./tsconfig.json ./tsconfig.json
 # node-purple dependencies
 #RUN apt-get update && apt-get install -y libpurple0 libpurple-dev libglib2.0-dev python3 git build-essential
 # This will build the optional dependency node-purple AND compile the typescript.
-RUN yarn install --frozen-lockfile --check-files
+RUN yarn install --check-files
 
 # App
-FROM node:14-buster-slim
+FROM node:16-buster-slim
 
 RUN mkdir app
 WORKDIR /app

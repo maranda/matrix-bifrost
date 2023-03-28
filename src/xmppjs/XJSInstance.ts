@@ -62,7 +62,7 @@ class XmppProtocol extends BifrostProtocol {
 }
 
 export const XMPP_PROTOCOL = new XmppProtocol();
-const SEEN_MESSAGES_SIZE = 16384;
+const SEEN_MESSAGES_SIZE = 327680;
 const XMPP_URI_GLOBAL_MATCH = /xmpp:([\+a-zA-Z0-9.-\u00c0-\u024f\u1e00-\u1eff]+@)?[a-zA-Z0-9.-]+(\?join)?/g;
 const XMPP_URI_SUB_MATCH = /xmpp:((.+)@)?([a-zA-Z0-9.-]+)(\?join)?/;
 
@@ -131,18 +131,22 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     }
 
     public xmppWriteToStream(xmlMsg: any) {
-        let xml = typeof (xmlMsg) === "string" ? xmlMsg : xmlMsg.xml;
-        if (!xml) {
-            // it's an element
-            xml = xmlMsg.toString();
+        try {
+            let xml = typeof (xmlMsg) === "string" ? xmlMsg : xmlMsg.xml;
+            if (!xml) {
+                // it's an element
+                xml = xmlMsg.toString();
+            }
+            if (this.canWrite) {
+                return this.xmpp.write(xml);
+            }
+            const p = new Promise((resolve) => {
+                this.bufferedMessages.push({ xmlMsg: xml, resolve });
+            });
+            return p;
+        } catch (ex) {
+            log.error("Failed to write to the XMPP Stream:", ex);
         }
-        if (this.canWrite) {
-            return this.xmpp.write(xml);
-        }
-        const p = new Promise((resolve) => {
-            this.bufferedMessages.push({xmlMsg: xml, resolve});
-        });
-        return p;
     }
 
     public xmppSendBulk(xmlMsgs: IStza[]): Promise<unknown> {
@@ -161,49 +165,62 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
      *
      * @param xmlMsg The XML stanza or string to send
      */
-    public xmppSend(xmlMsg: IStza|string): Promise<unknown> {
-        const xml = typeof(xmlMsg) === "string" ? xmlMsg : xmlMsg.xml;
-        let p: Promise<unknown>;
-        if (this.canWrite) {
-            this.xmpp.write(xml).catch((err: Error) => {
-                // This should only happen in case of a connection error
-                // that xmpp.js hasn't noticed yet for some reason.
-                // xmpp.js recovers from these automatically,
-                // so we can reschedule this for post-connection and hope it goes through then.
-                log.error("Error writing xmpp stanza:", err.toString(), "scheduling it for later");
-                p = new Promise((resolve) => {
-                    this.bufferedMessages.push({xmlMsg: xml, resolve});
+    public xmppSend(xmlMsg: IStza | string): Promise<unknown> {
+        try {
+            const xml = typeof (xmlMsg) === "string" ? xmlMsg : xmlMsg.xml;
+            let p: Promise<unknown>;
+            if (this.canWrite) {
+                this.xmpp.write(xml).catch((err: Error) => {
+                    // This should only happen in case of a connection error
+                    // that xmpp.js hasn't noticed yet for some reason.
+                    // xmpp.js recovers from these automatically,
+                    // so we can reschedule this for post-connection and hope it goes through then.
+                    log.error("Error writing xmpp stanza:", err.toString(), "scheduling it for later");
+                    p = new Promise((resolve) => {
+                        this.bufferedMessages.push({ xmlMsg: xml, resolve });
+                    });
                 });
-            });
-        } else {
-            p = new Promise((resolve) => {
-                this.bufferedMessages.push({xmlMsg: xml, resolve});
-            });
+            } else {
+                p = new Promise((resolve) => {
+                    this.bufferedMessages.push({ xmlMsg: xml, resolve });
+                });
+            }
+            if (typeof (xmlMsg) !== "string") {
+                Metrics.remoteCall(`xmpp.${xmlMsg.type}`);
+            }
+            return p;
+        } catch (ex) {
+            log.error("xmppSend() Exception:", ex);
         }
-        if (typeof(xmlMsg) !== "string") {
-            Metrics.remoteCall(`xmpp.${xmlMsg.type}`);
-        }
-        return p;
     }
 
-    public async sendIq(stza: StzaBase, timeoutMs = 10000): Promise<Element> {
-        if (stza.type !== "iq") {
-            throw Error("Stanza type must be of type IQ");
-        }
-        const p: Promise<Element> = new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error("timeout")), timeoutMs);
-            this.once("iq." + stza.id, (stanza: Element) => {
-                clearTimeout(timeout);
-                const error = stanza.getChild("error");
-                if (error) {
-                    reject({error, stanza});
+    public async sendIq(stza: StzaBase, timeoutMs = 10000) {
+        try {
+            if (stza.type !== "iq") {
+                throw Error("Stanza type must be of type IQ");
+            }
+            const p = new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(Error("Timeout")), timeoutMs);
+                this.once("iq." + stza.id, (stanza: Element) => {
+                    clearTimeout(timeout);
+                    if (stanza.getChild("error")) {
+                        reject(stanza);
+                    }
+                    resolve(stanza);
+                });
+            }).catch((ex) => {
+                if (ex instanceof Error) {
+                    log.error("sendIQ() Promise Exception:", ex);
+                } else if (ex instanceof Element) {
+                    return ex;
                 }
-                resolve(stanza);
             });
-        });
-        await this.xmppSend(stza);
-        Metrics.remoteCall("xmpp.iq");
-        return p;
+            await this.xmppSend(stza);
+            Metrics.remoteCall("xmpp.iq");
+            return p;
+        } catch (ex) {
+            log.error("sendIQ() Exception:", ex);
+        }
     }
 
     private cleanSeenMessages() {
@@ -306,17 +323,22 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             log.info(`flushing ${this.bufferedMessages.length} buffered messages`);
             if (this.connectionWasDropped) {
                 log.warn("Connection was dropped, attempting reconnect..");
-                this.presenceCache.clear();
-                for (const account of this.accounts.values()) {
-                    account.reconnectToRooms();
+                if (this.config.tuning.forceReconnectRooms) {
+                    for (const account of this.accounts.values()) {
+                        account.reconnectToRooms();
+                    }
                 }
             }
             while (this.bufferedMessages.length) {
                 if (!this.canWrite) {
                     return;
                 }
-                const msg = this.bufferedMessages.splice(0, 1)[0];
-                msg.resolve(this.xmpp.write(msg.xmlMsg));
+                try {
+                    const msg = this.bufferedMessages.splice(0, 1)[0];
+                    msg.resolve(this.xmpp.write(msg.xmlMsg));
+                } catch (ex) {
+                    log.error("Failed to write on stream while flushing message buffer:", ex);
+                }
             }
         });
 
@@ -429,24 +451,28 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
 
     public getUsernameFromMxid(
         mxid: string,
-        prefix: string = ""): {username: string, protocol: BifrostProtocol} {
-        // This is for GHOST accts
-        const uName = Util.unescapeUserId(new MatrixUser(mxid, {}, false).localpart);
-        const rPrefix = prefix ? `(${prefix})` : "";
-        let match = (new RegExp(`^${rPrefix}(.+\/)?(.+)?@(.+)$`)).exec(uName);
-        if (!match) {
-            match = (new RegExp(`^${rPrefix}(.+\/)?([^@]+)$`)).exec(uName);
+        prefix: string = ""): { username: string, protocol: BifrostProtocol } {
+        try {
+            // This is for GHOST accts
+            const uName = Util.unescapeUserId(new MatrixUser(mxid, {}, false).localpart);
+            const rPrefix = prefix ? `(${prefix})` : "";
+            let match = (new RegExp(`^${rPrefix}(.+\/)?(.+)?@(.+)$`)).exec(uName);
             if (!match) {
-                throw Error("Username didn't match");
+                match = (new RegExp(`^${rPrefix}(.+\/)?([^@]+)$`)).exec(uName);
+                if (!match) {
+                    throw Error("Username didn't match");
+                }
             }
+            const resource = match[2] ? match[2].substr(
+                0, match[2].length - "/".length) : "";
+            const localpart = match[3] ? match[3] : "";
+            const domain = match[4];
+            const username =
+                domain ? `${localpart}@${domain}${resource ? "/" + resource : ""}` : `${localpart}${resource ? "/" + resource : ""}`;
+            return { username, protocol: XMPP_PROTOCOL };
+        } catch (ex) {
+            log.error("getUsernameFromMxid() Exception:", ex);
         }
-        const resource = match[2] ? match[2].substr(
-            0, match[2].length - "/".length) : "";
-        const localpart = match[3] ? match[3] : "";
-        const domain = match[4];
-        const username =
-            domain ? `${localpart}@${domain}${resource ? "/" + resource : ""}` : `${localpart}${resource ? "/" + resource : ""}`;
-        return {username, protocol: XMPP_PROTOCOL};
     }
 
     public eventAck(eventName: string, data: IEventBody) {
@@ -514,34 +540,40 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         return body;
     }
 
-    private async getMucAvatar(room: string): Promise<Element> {
-        const id = uuid();
-        // check if MUC supports avatars
-        const result = await this.sendIq(new StzaIqDiscoInfo(this.myAddress.toString(), room, uuid(), "get"));
-        const supportVCards = result.getChild("query")?.getChildByAttr("var", "vcard-temp");
-        if (!supportVCards) {
-            throw Error("MUC doesn't support avatars");
-        }
-        const res = new Promise((resolve: (e: Element) => void, reject) => {
-            const timeout = setTimeout(() => reject(Error("Timeout")), 5000);
-            this.once(`iq.${id}`, (stanza: Element) => {
-                clearTimeout(timeout);
-                const vCard = (stanza.getChild("vCard") as unknown as Element);
-                if (vCard) {
-                    resolve(vCard);
-                }
-                reject(Error("Room has no avatar"));
+    private async getMucAvatar(room: string) {
+        try {
+            const id = uuid();
+            // check if MUC supports avatars
+            const result = await this.sendIq(new StzaIqDiscoInfo(this.myAddress.toString(), room, uuid(), "get")) as Element;
+            const supportVCards = result.getChild("query")?.getChildByAttr("var", "vcard-temp");
+            if (!supportVCards) {
+                throw Error("MUC doesn't support avatars");
+            }
+            const res = new Promise((resolve: (e: Element) => void, reject) => {
+                const timeout = setTimeout(() => reject(Error("Timeout")), 5000);
+                this.once(`iq.${id}`, (stanza: Element) => {
+                    clearTimeout(timeout);
+                    const vCard = (stanza.getChild("vCard") as Element);
+                    if (vCard) {
+                        resolve(vCard);
+                    }
+                    reject(Error("Room has no avatar"));
+                });
+            }).catch((ex) => {
+                log.error("getMucAvatar() Promise Exception:", ex);
             });
-        });
-        log.info(`Fetching MUC Avatar of ${room}`);
-        await this.xmppSend(
-            new StzaIqVcardRequest(this.xmppAddress.toString(), room, id),
-        );
-        Metrics.remoteCall("xmpp.iq.vc2");
-        return res;
+            log.info(`Fetching MUC Avatar of ${room}`);
+            await this.xmppSend(
+                new StzaIqVcardRequest(this.xmppAddress.toString(), room, id),
+            );
+            Metrics.remoteCall("xmpp.iq.vc2");
+            return res;
+        } catch (ex) {
+            log.error("getMucAvatar() Exception:", ex);
+        }
     }
 
-    public async getVCard(who: string, sender?: string): Promise<Element> {
+    public async getVCard(who: string, sender?: string) {
         const id = uuid();
         const whoJid = jid(who);
         who = Util.prepJID(whoJid);
@@ -569,12 +601,14 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             }
             this.once(`iq.${id}`, (stanza: Element) => {
                 clearTimeout(timeout);
-                const vCard = (stanza.getChild("vCard") as unknown as Element);
+                const vCard = (stanza.getChild("vCard") as Element);
                 if (vCard) {
                     resolve(vCard);
                 }
                 reject(Error("No vCard given"));
             });
+        }).catch((ex) => {
+            log.error("getVCard() Promise Exception:", ex);
         });
         log.info(`Fetching vCard for ${who}`);
         await this.xmppSend(
@@ -652,43 +686,47 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     }
 
     public async checkGroupExists(properties: IChatJoinProperties) {
-        const props = {
-            room: properties.room as string,
-            server: properties.server as string,
-        }
-        if (!props.server) {
-            throw Error("Missing property server");
-        }
-        if (!props.room) {
-            throw Error("Missing property room");
-        }
-        const to = `${props.room}@${props.server}`;
-        const id = uuid();
-        log.info(`Checking if ${to} is a MUC`);
         try {
-            const result = await this.sendIq(new StzaIqDiscoInfo(this.myAddress.toString(), to, id, "get"));
-            log.debug(`Found ${to}`);
-            const isMuc = result.getChild("query")?.getChildByAttr("var", "http://jabber.org/protocol/muc");
-            if (isMuc) {
-                this.checkMUCCache.set(to, true);
-            } else {
-                this.checkMUCCache.set(to, false);
+            const props = {
+                room: properties.room as string,
+                server: properties.server as string,
             }
-            return !!isMuc;
+            if (!props.server) {
+                throw Error("Missing property server");
+            }
+            if (!props.room) {
+                throw Error("Missing property room");
+            }
+            const to = `${props.room}@${props.server}`;
+            const id = uuid();
+            log.info(`Checking if ${to} is a MUC`);
+            try {
+                const result = await this.sendIq(new StzaIqDiscoInfo(this.myAddress.toString(), to, id, "get")) as Element;
+                log.debug(`Found ${to}`);
+                const isMuc = result.getChild("query")?.getChildByAttr("var", "http://jabber.org/protocol/muc");
+                if (isMuc) {
+                    this.checkMUCCache.set(to, true);
+                } else {
+                    this.checkMUCCache.set(to, false);
+                }
+                return !!isMuc;
+            } catch (ex) {
+                // TODO: Factor this out, error parsing would be useful.
+                log.info(`Could not find ${to}`);
+                if (ex.error) {
+                    const error = ex.error as Element;
+                    const code = error.getAttr("code");
+                    const type = error.getAttr("type");
+                    const text = error.getChildText("text");
+                    log.info(`checkGroupExists: ${code} ${type} ${text}`);
+                } else {
+                    log.info(`checkGroupExists: ${ex}`);
+                }
+                this.checkMUCCache.delete(to);
+                return false;
+            }
         } catch (ex) {
-            // TODO: Factor this out, error parsing would be useful.
-            log.info(`Could not find ${to}`);
-            if (ex.error) {
-                const error = ex.error as Element;
-                const code = error.getAttr("code");
-                const type = error.getAttr("type");
-                const text = error.getChildText("text");
-                log.info(`checkGroupExists: ${code} ${type} ${text}`);
-            } else {
-                log.info(`checkGroupExists: ${ex}`);
-            }
-            this.checkMUCCache.delete(to);
-            return false;
+            log.error("checkGroupExist() Exception:", ex);
         }
     }
 
@@ -874,7 +912,7 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
             } as IChatTopicState);
             // HACK, when we set the topic we also attempt setting the room avatar
             try {
-                const mucAvatar = await this.getMucAvatar(convName);
+                const mucAvatar = await this.getMucAvatar(convName) as Element;
                 const photo = mucAvatar.getChild("PHOTO");
                 const binval = photo!.getChildText("BINVAL");
                 if (binval) {

@@ -35,7 +35,8 @@ export interface IBifrostAccount extends IProfileProvider {
         components: IChatJoinProperties,
         purple?: IBifrostInstance,
         timeout?: number,
-        setWaiting?: boolean)
+        setWaiting?: boolean,
+        selfPing?: boolean)
     : Promise<IConversationEvent|void>;
 
     rejectChat(components: IChatJoinProperties);
