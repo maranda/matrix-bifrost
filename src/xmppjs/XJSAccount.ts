@@ -14,6 +14,7 @@ import { XHTMLIM } from "./XHTMLIM";
 import { StzaMessage, StzaIqPing, StzaPresenceJoin, StzaPresencePart, StzaIqVcardRequest } from "./Stanzas";
 import { Util } from "../Util";
 
+const HANDLE_REGEX = /^(.*)\/(.*)$/;
 const IDPREFIX = "bifrost";
 const CONFLICT_SUFFIX = "[m]";
 const LASTSTANZA_CHECK_MS = 3 * 60000;
@@ -55,35 +56,21 @@ export class XmppJsAccount implements IBifrostAccount {
         this.pmSessions = new Set();
         this.lastStanzaTs = new Map();
         this.checkInterval = setInterval(() => {
-            this.lastStanzaTs.forEach((ts, roomName) => {
+            this.lastStanzaTs.forEach((ts, roomNick) => {
                 if (Date.now() - ts > LASTSTANZA_MAXDURATION) {
-                    this.selfPing(roomName).then((isInRoom) => {
+                    this.selfPing(roomNick).then((isInRoom) => {
                         if (isInRoom) {
-                            this.lastStanzaTs.set(roomName, Date.now());
+                            this.lastStanzaTs.set(roomNick, Date.now());
                             return;
                         }
-                        // make really sure the handle is not null
-                        let handle: string;
-                        if (!this.roomHandles.has(roomName)) {
-                            log.warn(`${this.remoteId} has no handler for ${roomName}`);
-                            const handleRegex = /^(.*)\/(.*)$/;
-                            for (const roomNick of this.roomNicks.values()) {
-                                const match = roomNick.match(handleRegex);
-                                if (match && match[1] === roomName) {
-                                    handle = match[2];
-                                }
-                                break;
-                            }
-                        }
-                        if (this.roomHandles.get(roomName) || handle) {
-                            this.joinChat({
-                                fullRoomName: roomName,
-                                handle: this.roomHandles.get(roomName) || handle,
-                                avatar_hash: this.avatarHash,
-                            });
+                        const match = roomNick.match(HANDLE_REGEX);
+                        const roomName = match[1];
+                        const handle = match[2];
+                        if (this.roomHandles.has(roomName)) {
+                            this.rejoinChat(roomName);
                         } else {
-                            log.warn(`couldn't find a handler or nick for ${this.remoteId} and failed to rejoin removing self ping`);
-                            this.lastStanzaTs.delete(roomName);
+                            log.warn(`couldn't find a handle for ${this.remoteId} and failed to rejoin removing self ping`);
+                            this.lastStanzaTs.delete(`${roomName}/${handle}`);
                         }
                     });
                 }
@@ -96,7 +83,9 @@ export class XmppJsAccount implements IBifrostAccount {
     }
 
     public xmppBumpLastStanzaTs(roomName: string) {
-        this.lastStanzaTs.set(roomName, Date.now());
+        if (this.roomHandles.has(roomName)) {
+            this.lastStanzaTs.set(`${roomName}/${this.roomHandles.get(roomName)}`, Date.now());
+        }
     }
 
     public createNew(password?: string) {
@@ -204,6 +193,8 @@ export class XmppJsAccount implements IBifrostAccount {
             try {
                 if (!await this.selfPing(`${fullRoomName}/${handle}`, 240000)) {
                     log.debug("Rejoining", fullRoomName);
+                    this.roomHandles.delete(fullRoomName);
+                    this.roomNicks.delete(`${fullRoomName}/${handle}`);
                     await this.joinChat({
                         handle: handle,
                         fullRoomName: fullRoomName,
