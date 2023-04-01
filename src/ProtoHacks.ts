@@ -46,32 +46,36 @@ export class ProtoHacks {
     public static async addJoinProps(protocolId: string, props: any, userId: string, intent: Intent|string) {
         // When joining XMPP rooms, we should set a handle or pull off one from the users
         // profile.
-        if (protocolId === PRPL_XMPP || protocolId === XMPP_JS) {
-            if (!userId.match(/^@/)) {
-                // User doesn't have a mxId yet
-                return;
-            }
-            if (typeof (intent) === "string") {
-                props.handle = props.handle ? props.handle : intent;
-            } else {
-                try {
-                    let profile = await intent.getProfileInfo(userId);
-                    props.handle = props.handle ? props.handle : profile.displayname;
-                    if (protocolId === XMPP_JS) {
-                        // fetch and compute avatar hash
-                        if (profile.avatar_url) {
-                            props.avatar_hash = await this.getAvatarHash(userId, profile.avatar_url, intent);
+        try {
+            if (protocolId === PRPL_XMPP || protocolId === XMPP_JS) {
+                if (!userId.match(/^@/)) {
+                    // User doesn't have a mxId yet
+                    return;
+                }
+                if (typeof (intent) === "string") {
+                    props.handle = props.handle ? props.handle : intent;
+                } else {
+                    try {
+                        let profile = await intent.getProfileInfo(userId);
+                        props.handle = props.handle ? props.handle : profile.displayname;
+                        if (protocolId === XMPP_JS) {
+                            // fetch and compute avatar hash
+                            if (profile.avatar_url) {
+                                props.avatar_hash = await this.getAvatarHash(userId, profile.avatar_url, intent);
+                            }
                         }
+                    } catch (ex) {
+                        log.warn("Failed to get profile for", userId);
+                        props.handle = props.handle ? props.handle : userId;
                     }
-                } catch (ex) {
-                    log.warn("Failed to get profile for", userId);
-                    props.handle = props.handle ? props.handle : userId;
+                }
+                // also resource prep the handle
+                if (!Util.resourcePrep(props.handle)) {
+                    props.handle = userId;
                 }
             }
-            // also resource prep the handle
-            if (!Util.resourcePrep(props.handle)) {
-                props.handle = userId;
-            }
+        } catch (ex) {
+            log.error("addJoinProps() Exception:", ex);
         }
     }
 
