@@ -639,54 +639,58 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     }
 
     private async onStanza(stanza: Element) {
-        const startedAt = Date.now();
-        if (this.xmppSeenStanza(stanza) && stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
-            return;
-        }
-        if ((stanza.name === "message" || stanza.name === "presence") &&
-            stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
-            this.xmppAddStanza(stanza);
-        }
-        log.debug("Stanza:", stanza.toJSON());
-        const from = stanza.attrs.from ? jid(stanza.attrs.from) : null;
-        const to = stanza.attrs.to ? jid(stanza.attrs.to) : null;
-
-        const isOurs = (to !== null && to !== undefined) && to.domain === this.myAddress.domain;
-        log.info(`Got ${stanza.name} from=${from} to=${to} isOurs=${isOurs}`);
-        const alias = isOurs && to!.local.startsWith("#") && this.serviceHandler.parseAliasFromJID(to!) || null;
-        if (alias && !this.gateway) {
-            log.warn("Not handling gateway request, gateways are disabled");
-        }
         try {
-            if (isOurs) {
-                if (stanza.is("iq") && ["get", "set"].includes(stanza.getAttr("type"))) {
-                    await this.serviceHandler.handleIq(stanza, this.bridge.getIntent());
-                    return;
-                }
-                // If it wasn't an IQ or a room, then it's probably a PM.
-            }
-
-            if (alias && stanza.is("presence")) {
-                this.gateway!.handleStanza(stanza, alias);
+            const startedAt = Date.now();
+            if (this.xmppSeenStanza(stanza) && stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
                 return;
             }
-
-            if (stanza.is("message")) {
-                this.handleMessageStanza(stanza, alias);
-            } else if (stanza.is("presence")) {
-                this.handlePresenceStanza(stanza, alias);
-            } else if (stanza.is("iq") &&
-                ["result", "error"].includes(stanza.getAttr("type")) &&
-                stanza.attrs.id) {
-                this.emit("iq." + stanza.attrs.id, stanza);
-            } else if (stanza.is("iq") && stanza.getAttr("type") === "get" && isOurs) {
-                this.serviceHandler.handleIq(stanza, this.bridge.getIntent());
+            if ((stanza.name === "message" || stanza.name === "presence") &&
+                stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
+                this.xmppAddStanza(stanza);
             }
+            log.debug("Stanza:", stanza.toJSON());
+            const from = stanza.attrs.from ? jid(stanza.attrs.from) : null;
+            const to = stanza.attrs.to ? jid(stanza.attrs.to) : null;
+
+            const isOurs = (to !== null && to !== undefined) && to.domain === this.myAddress.domain;
+            log.info(`Got ${stanza.name} from=${from} to=${to} isOurs=${isOurs}`);
+            const alias = isOurs && to!.local.startsWith("#") && this.serviceHandler.parseAliasFromJID(to!) || null;
+            if (alias && !this.gateway) {
+                log.warn("Not handling gateway request, gateways are disabled");
+            }
+            try {
+                if (isOurs) {
+                    if (stanza.is("iq") && ["get", "set"].includes(stanza.getAttr("type"))) {
+                        await this.serviceHandler.handleIq(stanza, this.bridge.getIntent());
+                        return;
+                    }
+                    // If it wasn't an IQ or a room, then it's probably a PM.
+                }
+
+                if (alias && stanza.is("presence")) {
+                    this.gateway!.handleStanza(stanza, alias);
+                    return;
+                }
+
+                if (stanza.is("message")) {
+                    this.handleMessageStanza(stanza, alias);
+                } else if (stanza.is("presence")) {
+                    this.handlePresenceStanza(stanza, alias);
+                } else if (stanza.is("iq") &&
+                    ["result", "error"].includes(stanza.getAttr("type")) &&
+                    stanza.attrs.id) {
+                    this.emit("iq." + stanza.attrs.id, stanza);
+                } else if (stanza.is("iq") && stanza.getAttr("type") === "get" && isOurs) {
+                    this.serviceHandler.handleIq(stanza, this.bridge.getIntent());
+                }
+            } catch (ex) {
+                log.warn("Failed to handle stanza: ", ex);
+                Metrics.requestOutcome(true, Date.now() - startedAt, "fail");
+            }
+            Metrics.requestOutcome(true, Date.now() - startedAt, "success");
         } catch (ex) {
-            log.warn("Failed to handle stanza: ", ex);
-            Metrics.requestOutcome(true, Date.now() - startedAt, "fail");
+            log.error("onStanza() Exception:", ex);
         }
-        Metrics.requestOutcome(true, Date.now() - startedAt, "success");
     }
 
     public async checkGroupExists(properties: IChatJoinProperties) {
