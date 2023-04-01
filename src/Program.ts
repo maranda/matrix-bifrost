@@ -155,8 +155,11 @@ class Program {
                     } as IRemoteUserAdminData)
                 ).matrix.getId();
             }
-            const time = await this.bridge.pingAppserviceRoute(internalRoom);
-            log.info(`Successfully pinged the bridge. Round trip took ${time}ms`);
+            const time = await this.bridge.pingAppserviceRoute(internalRoom).catch((err) => {
+                log.error("Caught exception while pinging the bridge:", err);
+            }).finally(() => {
+                log.info(`Successfully pinged the bridge. Round trip took ${time}ms`);
+            });
         }
         catch (ex) {
             log.error("Homeserver cannot reach the bridge. You probably need to adjust your configuration.", ex);
