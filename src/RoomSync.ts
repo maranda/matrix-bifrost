@@ -15,9 +15,9 @@ interface IRoomMembership {
     membership: "join"|"leave";
 }
 
-const SYNC_RETRY_MS = 3000;
+const SYNC_RETRY_MS = 20000;
 const MAX_SYNCS = 8;
-const JOINLEAVE_TIMEOUT = 120000;
+const JOINLEAVE_TIMEOUT = 240000;
 
 export class RoomSync {
     private accountRoomMemberships: Map<string, IRoomMembership[]>;
