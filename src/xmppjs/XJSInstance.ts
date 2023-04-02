@@ -574,48 +574,52 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     }
 
     public async getVCard(who: string, sender?: string) {
-        const id = uuid();
-        const whoJid = jid(who);
-        who = Util.prepJID(whoJid);
-        let mucExists = this.checkMUCCache.get(who);
-        if (!mucExists && !this.checkMUCCache.has(who)) {
-            mucExists = await this.checkGroupExists({
-                ["room"]: whoJid.local, ["server"]: whoJid.domain
-            } as IChatJoinProperties);
-        }
-        const res = new Promise((resolve: (e: Element) => void, reject) => {
-            const timeout = setTimeout(() => reject(Error("Timeout")), 5000);
-            if (mucExists) {
-                for (let [username, account] of this.accounts) {
-                    log.debug(`Checking if ${username} is in ${who}`);
-                    if (account.isInRoom(who)) {
-                        sender = username + "/" + this.defaultRes;
-                        who = `${Util.prepJID(whoJid)}/${whoJid.resource}`;
-                        log.info(`Sending IQ from ${username}`);
-                        break;
+        try {
+            const id = uuid();
+            const whoJid = jid(who);
+            who = Util.prepJID(whoJid);
+            let mucExists = this.checkMUCCache.get(who);
+            if (!mucExists && !this.checkMUCCache.has(who)) {
+                mucExists = await this.checkGroupExists({
+                    ["room"]: whoJid.local, ["server"]: whoJid.domain
+                } as IChatJoinProperties);
+            }
+            const res = new Promise((resolve: (e: Element) => void, reject) => {
+                const timeout = setTimeout(() => reject(Error("Timeout")), 5000);
+                if (mucExists) {
+                    for (let [username, account] of this.accounts) {
+                        log.debug(`Checking if ${username} is in ${who}`);
+                        if (account.isInRoom(who)) {
+                            sender = username + "/" + this.defaultRes;
+                            who = `${Util.prepJID(whoJid)}/${whoJid.resource}`;
+                            log.info(`Sending IQ from ${username}`);
+                            break;
+                        }
+                    }
+                    if (!sender) {
+                        reject(Error("Not fetching vCard from the MUC, no sender"));
                     }
                 }
-                if (!sender) {
-                    reject(Error("Not fetching vCard from the MUC, no sender"));
-                }
-            }
-            this.once(`iq.${id}`, (stanza: Element) => {
-                clearTimeout(timeout);
-                const vCard = (stanza.getChild("vCard") as Element);
-                if (vCard) {
-                    resolve(vCard);
-                }
-                reject(Error("No vCard given"));
+                this.once(`iq.${id}`, (stanza: Element) => {
+                    clearTimeout(timeout);
+                    const vCard = (stanza.getChild("vCard") as Element);
+                    if (vCard) {
+                        resolve(vCard);
+                    }
+                    reject(Error("No vCard given"));
+                });
+            }).catch((ex) => {
+                log.error("getVCard() Promise Exception:", ex);
             });
-        }).catch((ex) => {
-            log.error("getVCard() Promise Exception:", ex);
-        });
-        log.info(`Fetching vCard for ${who}`);
-        await this.xmppSend(
-            new StzaIqVcardRequest(sender || this.xmppAddress.toString(), who, id),
-        );
-        Metrics.remoteCall("xmpp.iq.vc2");
-        return res;
+            log.info(`Fetching vCard for ${who}`);
+            await this.xmppSend(
+                new StzaIqVcardRequest(sender || this.xmppAddress.toString(), who, id),
+            );
+            Metrics.remoteCall("xmpp.iq.vc2");
+            return res;
+        } catch (ex) {
+            log.error("getVcard() Exception:", ex);
+        }
     }
 
     public generateIdforMsg(stanza: Element) {
@@ -635,54 +639,58 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
     }
 
     private async onStanza(stanza: Element) {
-        const startedAt = Date.now();
-        if (this.xmppSeenStanza(stanza) && stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
-            return;
-        }
-        if ((stanza.name === "message" || stanza.name === "presence") &&
-            stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
-            this.xmppAddStanza(stanza);
-        }
-        log.debug("Stanza:", stanza.toJSON());
-        const from = stanza.attrs.from ? jid(stanza.attrs.from) : null;
-        const to = stanza.attrs.to ? jid(stanza.attrs.to) : null;
-
-        const isOurs = (to !== null && to !== undefined) && to.domain === this.myAddress.domain;
-        log.info(`Got ${stanza.name} from=${from} to=${to} isOurs=${isOurs}`);
-        const alias = isOurs && to!.local.startsWith("#") && this.serviceHandler.parseAliasFromJID(to!) || null;
-        if (alias && !this.gateway) {
-            log.warn("Not handling gateway request, gateways are disabled");
-        }
         try {
-            if (isOurs) {
-                if (stanza.is("iq") && ["get", "set"].includes(stanza.getAttr("type"))) {
-                    await this.serviceHandler.handleIq(stanza, this.bridge.getIntent());
-                    return;
-                }
-                // If it wasn't an IQ or a room, then it's probably a PM.
-            }
-
-            if (alias && stanza.is("presence")) {
-                this.gateway!.handleStanza(stanza, alias);
+            const startedAt = Date.now();
+            if (this.xmppSeenStanza(stanza) && stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
                 return;
             }
-
-            if (stanza.is("message")) {
-                this.handleMessageStanza(stanza, alias);
-            } else if (stanza.is("presence")) {
-                this.handlePresenceStanza(stanza, alias);
-            } else if (stanza.is("iq") &&
-                ["result", "error"].includes(stanza.getAttr("type")) &&
-                stanza.attrs.id) {
-                this.emit("iq." + stanza.attrs.id, stanza);
-            } else if (stanza.is("iq") && stanza.getAttr("type") === "get" && isOurs) {
-                this.serviceHandler.handleIq(stanza, this.bridge.getIntent());
+            if ((stanza.name === "message" || stanza.name === "presence") &&
+                stanza.attrs.type !== "unavailable" && stanza.attrs.type !== "error") {
+                this.xmppAddStanza(stanza);
             }
+            log.debug("Stanza:", stanza.toJSON());
+            const from = stanza.attrs.from ? jid(stanza.attrs.from) : null;
+            const to = stanza.attrs.to ? jid(stanza.attrs.to) : null;
+
+            const isOurs = (to !== null && to !== undefined) && to.domain === this.myAddress.domain;
+            log.info(`Got ${stanza.name} from=${from} to=${to} isOurs=${isOurs}`);
+            const alias = isOurs && to!.local.startsWith("#") && this.serviceHandler.parseAliasFromJID(to!) || null;
+            if (alias && !this.gateway) {
+                log.warn("Not handling gateway request, gateways are disabled");
+            }
+            try {
+                if (isOurs) {
+                    if (stanza.is("iq") && ["get", "set"].includes(stanza.getAttr("type"))) {
+                        await this.serviceHandler.handleIq(stanza, this.bridge.getIntent());
+                        return;
+                    }
+                    // If it wasn't an IQ or a room, then it's probably a PM.
+                }
+
+                if (alias && stanza.is("presence")) {
+                    this.gateway!.handleStanza(stanza, alias);
+                    return;
+                }
+
+                if (stanza.is("message")) {
+                    this.handleMessageStanza(stanza, alias);
+                } else if (stanza.is("presence")) {
+                    this.handlePresenceStanza(stanza, alias);
+                } else if (stanza.is("iq") &&
+                    ["result", "error"].includes(stanza.getAttr("type")) &&
+                    stanza.attrs.id) {
+                    this.emit("iq." + stanza.attrs.id, stanza);
+                } else if (stanza.is("iq") && stanza.getAttr("type") === "get" && isOurs) {
+                    this.serviceHandler.handleIq(stanza, this.bridge.getIntent());
+                }
+            } catch (ex) {
+                log.warn("Failed to handle stanza: ", ex);
+                Metrics.requestOutcome(true, Date.now() - startedAt, "fail");
+            }
+            Metrics.requestOutcome(true, Date.now() - startedAt, "success");
         } catch (ex) {
-            log.warn("Failed to handle stanza: ", ex);
-            Metrics.requestOutcome(true, Date.now() - startedAt, "fail");
+            log.error("onStanza() Exception:", ex);
         }
-        Metrics.requestOutcome(true, Date.now() - startedAt, "success");
     }
 
     public async checkGroupExists(properties: IChatJoinProperties) {
@@ -730,126 +738,176 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
         }
     }
 
-    private async handleMessageStanza(stanza: Element, alias: string|null) {
-        if (!stanza.attrs.from || !stanza.attrs.to) {
-            return;
-        }
-        const to = jid(stanza.attrs.to)!;
-        let localAcct: any = this.accounts.get(Util.prepJID(to!))!;
-        let from = jid(stanza.attrs.from);
-        let convName = Util.prepJID(from);
+    private async handleMessageStanza(stanza: Element, alias: string | null) {
+        try {
+            if (!stanza.attrs.from || !stanza.attrs.to) {
+                return;
+            }
+            const to = jid(stanza.attrs.to)!;
+            let localAcct: any = this.accounts.get(Util.prepJID(to!))!;
+            let from = jid(stanza.attrs.from);
+            let convName = Util.prepJID(from);
 
-        if (alias) {
-            // If this is an alias, we want to do some gateway related things.
-            if (!to.resource) {
-                // Group message to a MUC, so reflect it to other XMPP users
-                // and set the right to/from addresses.
-                convName = Util.prepJID(to);
-                log.info(`Sending gateway group message to ${convName}`);
-                // stamp our own stanza-id on the message
-                if (stanza.getChild("stanza-id", "urn:xmpp:sid:0")) {
-                    // remove spoofed stanza-id
-                    stanza.remove("stanza-id", "urn:xmpp:sid:0");
-                }
-                stanza.c("stanza-id", { xmlns: "urn:xmpp:sid:0", id: uuid(), by: convName, });
-                if (!(await this.gateway!.reflectXMPPMessage(convName, stanza))) {
-                    log.warn(`Message could not be sent, not forwarding to Matrix`);
-                    return;
-                }
-                // We deliberately do not anonymize the JID here.
-                // We do however strip the resource
-                from = jid(Util.prepJID(from));
-            } else {
-                // This is a PM, then.
-                convName = Util.prepJID(to);
-                const userId = this.gateway!.getMatrixIDForJID(convName, to);
-                if (userId) {
-                    // This is a PM *to* matrix
-                    log.info(`Sending gateway PM to ${userId} (${to})`);
-                    localAcct = undefined;
-                    for (const acct of this.accounts.values()) {
-                        if (acct.mxId === userId) {
-                            localAcct = acct;
-                            break;
-                        }
+            if (alias) {
+                // If this is an alias, we want to do some gateway related things.
+                if (!to.resource) {
+                    // Group message to a MUC, so reflect it to other XMPP users
+                    // and set the right to/from addresses.
+                    convName = Util.prepJID(to);
+                    log.info(`Sending gateway group message to ${convName}`);
+                    // stamp our own stanza-id on the message
+                    if (stanza.getChild("stanza-id", "urn:xmpp:sid:0")) {
+                        // remove spoofed stanza-id
+                        stanza.remove("stanza-id", "urn:xmpp:sid:0");
                     }
-                    if (localAcct === undefined) {
-                        log.warn(`No account defined for ${userId}, registering new account.`);
-                        try {
-                            localAcct = await this.autoRegister!.registerUser(XMPP_PROTOCOL.id, userId) as XmppJsAccount;
-                        } catch (ex) {
-                            log.error("Failed to reverse register user:", ex);
-                        }
+                    stanza.c("stanza-id", { xmlns: "urn:xmpp:sid:0", id: uuid(), by: convName, });
+                    if (!(await this.gateway!.reflectXMPPMessage(convName, stanza))) {
+                        log.warn(`Message could not be sent, not forwarding to Matrix`);
+                        return;
                     }
-                    const anonJid = this.gateway!.getAnonIDForJID(convName, from);
-                    if (anonJid) {
-                        from = jid(anonJid);
+                    // We deliberately do not anonymize the JID here.
+                    // We do however strip the resource
+                    from = jid(Util.prepJID(from));
+                } else {
+                    // This is a PM, then.
+                    convName = Util.prepJID(to);
+                    const userId = this.gateway!.getMatrixIDForJID(convName, to);
+                    if (userId) {
+                        // This is a PM *to* matrix
+                        log.info(`Sending gateway PM to ${userId} (${to})`);
+                        localAcct = undefined;
+                        for (const acct of this.accounts.values()) {
+                            if (acct.mxId === userId) {
+                                localAcct = acct;
+                                break;
+                            }
+                        }
+                        if (localAcct === undefined) {
+                            log.warn(`No account defined for ${userId}, registering new account.`);
+                            try {
+                                localAcct = await this.autoRegister!.registerUser(XMPP_PROTOCOL.id, userId) as XmppJsAccount;
+                            } catch (ex) {
+                                log.error("Failed to reverse register user:", ex);
+                            }
+                        }
+                        const anonJid = this.gateway!.getAnonIDForJID(convName, from);
+                        if (anonJid) {
+                            from = jid(anonJid);
+                        } else {
+                            log.error("Couldn't find anon jid for PM");
+                            return;
+                        }
                     } else {
-                        log.error("Couldn't find anon jid for PM");
+                        // This is a PM to another XMPP user, easy.
+                        log.info(`Sending gateway PM to XMPP user (${to})`);
+                        this.gateway!.reflectPM(stanza);
+                        return;
+                    }
+                }
+            }
+            const chatState = stanza.getChildByAttr("xmlns", "http://jabber.org/protocol/chatstates");
+
+            if (stanza.attrs.type === "error") {
+                // We got an error back from sending a message, let's handle it.
+                const error = stanza.getChild("error")!;
+                log.warn(`Message ${stanza.attrs.id} returned an error: `, error.toString());
+                if (error.getChild("not-acceptable") && localAcct) {
+                    log.warn("Got not-acceptable, rejoining room..");
+                    // https://xmpp.org/extensions/xep-0045.html#message says we
+                    // should treat this as the user not being joined.
+                    await localAcct.rejoinChat(convName);
+                    // Resend the message
+                    const xMsg = this.sentMessageStanzas.get(stanza.attrs.id);
+                    if (xMsg && !this.resentMessageStanzas.has(stanza.attrs.id)) {
+                        this.resentMessageStanzas.add(stanza.attrs.id);
+                        this.seenMessages.add(stanza.attrs.id);
+                        this.xmppSend(xMsg);
+                    }
+                }
+            }
+            const type = stanza.attrs.type;
+
+            if (!localAcct && !alias) {
+                // No local account, attempt to autoregister it?
+                if (this.autoRegister) {
+                    try {
+                        const acct = await this.autoRegister.reverseRegisterUser(stanza.attrs.to, XMPP_PROTOCOL)!;
+                        localAcct = this.getAccount(acct.remoteId, XMPP_PROTOCOL.id, "") as XmppJsAccount;
+                    } catch (ex) {
+                        log.warn("Failed to autoregister user:", ex);
                         return;
                     }
                 } else {
-                    // This is a PM to another XMPP user, easy.
-                    log.info(`Sending gateway PM to XMPP user (${to})`);
-                    this.gateway!.reflectPM(stanza);
-                    return;
+                    log.warn("Could not handle message, auto registration is disabled");
+                }
+            } else if (!localAcct && alias) {
+                // This is a gateway, so setup a fake account.
+                localAcct = {
+                    remoteId: Util.prepJID(to!),
+                } as any;
+            }
+
+            if (!alias) {
+                // This is used to reset a timer that will self ping
+                // if no messages get seen. This is pointless on a gateway,
+                // so disable it.
+                localAcct.xmppBumpLastStanzaTs(convName);
+            }
+
+            if (chatState) {
+                if (chatState.is("composing") || chatState.is("active") || chatState.is("paused")) {
+                    const eventName = type === "groupchat" ? "chat-typing" : "im-typing";
+                    this.emit(eventName, {
+                        eventName,
+                        conv: {
+                            name: convName,
+                        },
+                        account: {
+                            protocol_id: XMPP_PROTOCOL.id,
+                            username: localAcct.remoteId,
+                        },
+                        sender: from.toString(),
+                        typing: chatState.is("composing"),
+                    } as IChatTyping);
+                }
+
+                if (chatState.is("active")) {
+                    // TODO: Should this expire.
+                    this.activeMUCUsers.add(from.toString());
+                    const readMsg = this.lastMessageInMUC.get(convName);
+                    if (readMsg) {
+                        log.info(`${from.toString()} became active, updating RR with ${readMsg.id}`);
+                        this.emit("read-receipt", {
+                            eventName: "read-receipt",
+                            sender: from.toString(),
+                            messageId: readMsg.id,
+                            conv: {
+                                // Don't include the handle
+                                name: convName,
+                            },
+                            account: {
+                                protocol_id: XMPP_PROTOCOL.id,
+                                username: null, // TODO: Lazy shortcut.
+                            },
+                            isGateway: false,
+                            originIsMatrix: readMsg.originIsMatrix,
+                        } as IChatReadReceipt);
+                    }
+                } else if (chatState.is("inactive")) {
+                    log.info(`${from.toString()} became inactive`);
+                    this.activeMUCUsers.delete(from.toString());
                 }
             }
-        }
-        const chatState = stanza.getChildByAttr("xmlns", "http://jabber.org/protocol/chatstates");
 
-        if (stanza.attrs.type === "error") {
-            // We got an error back from sending a message, let's handle it.
-            const error = stanza.getChild("error")!;
-            log.warn(`Message ${stanza.attrs.id} returned an error: `, error.toString());
-            if (error.getChild("not-acceptable") && localAcct) {
-                log.warn("Got not-acceptable, rejoining room..");
-                // https://xmpp.org/extensions/xep-0045.html#message says we
-                // should treat this as the user not being joined.
-                await localAcct.rejoinChat(convName);
-                // Resend the message
-                const xMsg = this.sentMessageStanzas.get(stanza.attrs.id);
-                if (xMsg && !this.resentMessageStanzas.has(stanza.attrs.id)) {
-                    this.resentMessageStanzas.add(stanza.attrs.id);
-                    this.seenMessages.add(stanza.attrs.id);
-                    this.xmppSend(xMsg);
-                }
-            }
-        }
-        const type = stanza.attrs.type;
-
-        if (!localAcct && !alias) {
-            // No local account, attempt to autoregister it?
-            if (this.autoRegister) {
-                try {
-                    const acct = await this.autoRegister.reverseRegisterUser(stanza.attrs.to, XMPP_PROTOCOL)!;
-                    localAcct = this.getAccount(acct.remoteId, XMPP_PROTOCOL.id, "") as XmppJsAccount;
-                } catch (ex) {
-                    log.warn("Failed to autoregister user:", ex);
-                    return;
-                }
-            } else {
-                log.warn("Could not handle message, auto registration is disabled");
-            }
-        } else if (!localAcct && alias) {
-            // This is a gateway, so setup a fake account.
-            localAcct = {
-                remoteId: Util.prepJID(to!),
-            } as any;
-        }
-
-        if (!alias) {
-            // This is used to reset a timer that will self ping
-            // if no messages get seen. This is pointless on a gateway,
-            // so disable it.
-            localAcct.xmppBumpLastStanzaTs(convName);
-        }
-
-        if (chatState) {
-            if (chatState.is("composing") || chatState.is("active") || chatState.is("paused")) {
-                const eventName = type === "groupchat" ? "chat-typing" : "im-typing";
-                this.emit(eventName, {
-                    eventName,
+            // XXX: Must be a better way to handle this.
+            const subject = stanza.getChildText("subject");
+            if (subject && type === "groupchat") {
+                // Room names in XMPP are basically just local@domain,
+                // and so is sort of implied by the from address. We will emit
+                // a room name change at the same time as the subject. The
+                // RoomHandler code shouldn't attempt to change the name unless it is empty.
+                this.emit("chat-topic", {
+                    eventName: "chat-topic",
                     conv: {
                         name: convName,
                     },
@@ -858,90 +916,44 @@ export class XmppJsInstance extends EventEmitter implements IBifrostInstance {
                         username: localAcct.remoteId,
                     },
                     sender: from.toString(),
-                    typing: chatState.is("composing"),
-                } as IChatTyping);
-            }
-
-            if (chatState.is("active")) {
-                // TODO: Should this expire.
-                this.activeMUCUsers.add(from.toString());
-                const readMsg = this.lastMessageInMUC.get(convName);
-                if (readMsg) {
-                    log.info(`${from.toString()} became active, updating RR with ${readMsg.id}`);
-                    this.emit("read-receipt", {
-                        eventName: "read-receipt",
-                        sender: from.toString(),
-                        messageId: readMsg.id,
-                        conv: {
-                            // Don't include the handle
-                            name: convName,
-                        },
-                        account: {
-                            protocol_id: XMPP_PROTOCOL.id,
-                            username: null, // TODO: Lazy shortcut.
-                        },
-                        isGateway: false,
-                        originIsMatrix: readMsg.originIsMatrix,
-                    } as IChatReadReceipt);
+                    topic: subject,
+                    isGateway: false,
+                } as IChatTopicState);
+                // HACK, when we set the topic we also attempt setting the room avatar
+                try {
+                    const mucAvatar = await this.getMucAvatar(convName) as Element;
+                    const photo = mucAvatar.getChild("PHOTO");
+                    const binval = photo!.getChildText("BINVAL");
+                    if (binval) {
+                        this.emit("chat-avatar", {
+                            eventName: "chat-avatar",
+                            conv: {
+                                name: convName,
+                                avatar_type: photo!.getChildText("TYPE"),
+                            },
+                            account: {
+                                protocol_id: XMPP_PROTOCOL.id,
+                                username: this.bridge.getBot().getUserId,
+                            },
+                            sender: this.myAddress.toString(),
+                            buffer: Buffer.from(binval, "base64"),
+                            isGateway: false,
+                        } as IChatAvatarState);
+                    }
+                } catch (ex) {
+                    log.warn(`Couldn't fetch MUC Avatar: ${ex}`);
                 }
-            } else if (chatState.is("inactive")) {
-                log.info(`${from.toString()} became inactive`);
-                this.activeMUCUsers.delete(from.toString());
             }
-        }
 
-        // XXX: Must be a better way to handle this.
-        const subject = stanza.getChildText("subject");
-        if (subject && type === "groupchat") {
-            // Room names in XMPP are basically just local@domain,
-            // and so is sort of implied by the from address. We will emit
-            // a room name change at the same time as the subject. The
-            // RoomHandler code shouldn't attempt to change the name unless it is empty.
-            this.emit("chat-topic", {
-                eventName: "chat-topic",
-                conv: {
-                    name: convName,
-                },
-                account: {
-                    protocol_id: XMPP_PROTOCOL.id,
-                    username: localAcct.remoteId,
-                },
-                sender: from.toString(),
-                topic: subject,
-                isGateway: false,
-            } as IChatTopicState);
-            // HACK, when we set the topic we also attempt setting the room avatar
-            try {
-                const mucAvatar = await this.getMucAvatar(convName) as Element;
-                const photo = mucAvatar.getChild("PHOTO");
-                const binval = photo!.getChildText("BINVAL");
-                if (binval) {
-                    this.emit("chat-avatar", {
-                        eventName: "chat-avatar",
-                        conv: {
-                            name: convName,
-                            avatar_type: photo!.getChildText("TYPE"),
-                        },
-                        account: {
-                            protocol_id: XMPP_PROTOCOL.id,
-                            username: this.bridge.getBot().getUserId,
-                        },
-                        sender: this.myAddress.toString(),
-                        buffer: Buffer.from(binval, "base64"),
-                        isGateway: false,
-                    } as IChatAvatarState);
-                }
-            } catch (ex) {
-                log.warn(`Couldn't fetch MUC Avatar: ${ex}`);
+            const body = stanza.getChild("body");
+            if (!body) {
+                log.debug("Don't know how to handle a message without children");
+                return;
             }
+            return this.handleTextMessage(stanza, localAcct, from, convName, alias != null);
+        } catch (ex) {
+            log.error("handleMessageStanza() Exception:", ex);
         }
-
-        const body = stanza.getChild("body");
-        if (!body) {
-            log.debug("Don't know how to handle a message without children");
-            return;
-        }
-        return this.handleTextMessage(stanza, localAcct, from, convName, alias != null);
     }
 
     private handleTextMessage(stanza: Element, localAcct: XmppJsAccount, from: JID,

@@ -144,7 +144,7 @@ export class MAMHandler {
                     previous = archiveCache.length;
                 }
             }
-            log.info(`Got MAM parameters -> start:${request.start ?.valueOf()} end:${request.end ?.valueOf()} with:${request.with}`);
+            log.info(`Got MAM parameters -> start:${request.start?.valueOf()} end:${request.end?.valueOf()} with:${request.with}`);
 
             if (!request.rsm) {
                 // assume last page
@@ -176,7 +176,7 @@ export class MAMHandler {
                     if (!request.start && !request.end) {
                         throw Error("Need to specify either a start or end offset to request the page after it");
                     }
-                    start_idx = archiveCache.findIndex((ev) => ev.origin_server_ts > (request.start ?.valueOf() || request.end ?.valueOf()));
+                    start_idx = archiveCache.findIndex((ev) => ev.origin_server_ts > (request.start?.valueOf() || request.end?.valueOf()));
                     end_idx = start_idx !== -1 ? start_idx + max : undefined;
                 } else if (typeof request.rsm.before === "string" && typeof request.rsm.after === "string") {
                     start_idx = archiveCache.findIndex((ev) => ev.event_id === request.rsm.after) + 1;
@@ -215,7 +215,7 @@ export class MAMHandler {
                     // assume end of archive
                     complete = true;
                 } else {
-                    complete = archiveCache[archiveCache.length - 1] ?.event_id === fst_lst.lst ? true : false;
+                    complete = archiveCache[archiveCache.length - 1]?.event_id === fst_lst.lst ? true : false;
                 }
                 log.info(`Returning ${results.length} messages`);
             }
@@ -257,7 +257,7 @@ export class MAMHandler {
                 log.warn(`Failed to fetch ${request.roomId} state for MUC Nicks -> ${ex}`);
             });
             const membership: { displayname?: string, sender: string }[] =
-                state ?.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
+                state?.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
                     {
                         displayname: Util.resourcePrep(e.content.displayname),
                         sender: e.sender,
@@ -270,7 +270,7 @@ export class MAMHandler {
                     continue;
                 }
                 let mucNick: string =
-                    request.gatewayJID + "/" + (membership ?.find((member) => ev.sender === member.sender) ?.displayname || ev.sender);
+                    request.gatewayJID + "/" + (membership?.find((member) => ev.sender === member.sender)?.displayname || ev.sender);
                 if (request.with && request.with !== mucNick) {
                     continue;
                 }
@@ -285,9 +285,9 @@ export class MAMHandler {
                     from: mucNick,
                     to: request.gatewayJID,
                     payload: MessageFormatter.matrixEventToBody(ev as MatrixMessageEvent, this.config),
-                    originId: ev.content ?.origin_id as string,
-                    remoteId: ev.content ?.remote_id as string,
-                    stanzaId: ev.content ?.stanza_id as string,
+                    originId: ev.content?.origin_id as string,
+                    remoteId: ev.content?.remote_id as string,
+                    stanzaId: ev.content?.stanza_id as string,
                 });
                 lst = ev.event_id;
                 count++;
@@ -345,8 +345,8 @@ export class MAMHandler {
                 mamCache.sort((a, b) => a.origin_server_ts - b.origin_server_ts);
             }
             log.info(`Setting FE and LE for -> ${roomId}`);
-            this.archiveFE.set(roomId, mamCache[0] ?.origin_server_ts);
-            this.archiveLE.set(roomId, mamCache[mamCache.length - 1] ?.origin_server_ts);
+            this.archiveFE.set(roomId, mamCache[0]?.origin_server_ts);
+            this.archiveLE.set(roomId, mamCache[mamCache.length - 1]?.origin_server_ts);
         } catch (ex) {
             log.error("MAM convergeEvRoomCache() Exception:", ex);
         }

@@ -258,10 +258,10 @@ export class MatrixRoomHandler {
             // For some reason the following function wites to remoteData, so recreate it later
             const remoteEntry = await this.store.getGroupRoomByRemoteData(remoteData);
             if (remoteEntry) {
-                if (remoteEntry.remote ?.get("plumbed") && failIfPlumbed) {
+                if (remoteEntry.remote?.get("plumbed") && failIfPlumbed) {
                     return false;
                 }
-                return remoteEntry.matrix ?.getId();
+                return remoteEntry.matrix?.getId();
             }
 
             // This could be that this is the first user to join a gateway room
@@ -483,10 +483,10 @@ export class MatrixRoomHandler {
                     const isKnown = await intent.getEvent(roomId, data.message.redacted.redact_id, true).catch((ex) => {
                         log.error("Failed to fetch original message for redaction:", ex);
                     }) as WeakEvent;
-                    if (isKnown ?.sender === senderMatrixUser.userId) {
+                    if (isKnown?.sender === senderMatrixUser.userId) {
                         await intent.getClient().redactEvent(roomId, data.message.redacted.redact_id);
                     } else {
-                        throw Error(`Failed to redact ${data.message.redacted.redact_id} -> ds:${senderMatrixUser.userId} ks:${isKnown ?.sender}`);
+                        throw Error(`Failed to redact ${data.message.redacted.redact_id} -> ds:${senderMatrixUser.userId} ks:${isKnown?.sender}`);
                     }
                 } catch (e) {
                     log.error(`Failed to redact message for this Group: ${e}`);

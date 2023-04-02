@@ -457,13 +457,14 @@ export class ServiceHandler {
                     return;
                 }
                 const chatName = Util.prepJID(toJid);
-                const result = !!this.xmpp.gateway.isJIDInMuc(chatName, fromJid);
-                if (result) {
+                const gatewayResult = !!this.xmpp.gateway.isJIDInMuc(chatName, fromJid);
+                const plumbedResult = !!this.xmpp.getAccountForJid(new JID(toJid.local, toJid.domain));
+                if (gatewayResult || plumbedResult) {
                     await this.xmpp.xmppSend(new StzaIqPing(to, from, id, "result"));
                 } else {
                     await this.xmpp.xmppSend(new StzaIqPingError(to, from, id, "not-acceptable", chatName));
                 }
-                log.debug(`Self ping result sent to ${from} (result=${result})`);
+                log.debug(`Self ping result sent to ${from}`);
                 return;
             }
 
