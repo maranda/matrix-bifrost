@@ -201,7 +201,7 @@ export class XmppJsGateway implements IGateway {
             }
             const msgs = [...this.members.getXmppMembersDevices(chatName)].map((device) => {
                 const stanza = new StzaMessage(
-                    msg.redacted ?.moderation ? chatName : from.anonymousJid.toString(),
+                    msg.redacted?.moderation ? chatName : from.anonymousJid.toString(),
                     device,
                     msg,
                     "groupchat",
@@ -218,7 +218,7 @@ export class XmppJsGateway implements IGateway {
 
             // add the message to the room history
             const historyStanza = new StzaMessage(
-                msg.redacted ?.moderation ? chatName : from.anonymousJid.toString(),
+                msg.redacted?.moderation ? chatName : from.anonymousJid.toString(),
                 "",
                 msg,
                 "groupchat",
@@ -226,7 +226,7 @@ export class XmppJsGateway implements IGateway {
             historyStanza.stanzaId = !msg.redacted ? msg.id : undefined;
             if (room.allowHistory) {
                 this.roomHistory.addMessage(chatName, parse(historyStanza.xml),
-                    msg.redacted ?.moderation ? from.anonymousJid.bare() : from.anonymousJid);
+                    msg.redacted?.moderation ? from.anonymousJid.bare() : from.anonymousJid);
             }
 
             return this.xmpp.xmppSendBulk(msgs);
@@ -478,7 +478,7 @@ export class XmppJsGateway implements IGateway {
             await Promise.all(allMembershipPromises);
 
             // get vcard hash
-            const selfHash = stanza.getChild("x", "vcard-temp:x:update") ?.getChildText("photo");
+            const selfHash = stanza.getChild("x", "vcard-temp:x:update")?.getChildText("photo");
 
             // send room vcard hash
             const roomHash = await this.getRoomAvatarHash(chatName);
@@ -532,7 +532,7 @@ export class XmppJsGateway implements IGateway {
             if (room.allowHistory) {
                 log.debug("Emitting history");
                 const historyLimits: IHistoryLimits = {};
-                const historyRequest = stanza.getChild("x", "http://jabber.org/protocol/muc") ?.getChild("history");
+                const historyRequest = stanza.getChild("x", "http://jabber.org/protocol/muc")?.getChild("history");
                 if (historyRequest !== undefined) {
                     const getIntValue = (str) => {
                         if (!/^\d+$/.test(str)) {
@@ -732,7 +732,7 @@ export class XmppJsGateway implements IGateway {
                 if (member.membership === "join") {
                     joined++;
                     let avatarHash: string = member.avatar_hash;
-                    if (avatarHash ?.match(REGEXP_MXC)) {
+                    if (avatarHash?.match(REGEXP_MXC)) {
                         avatarHash = await ProtoHacks.getAvatarHash(member.stateKey, member.avatar_hash, this.bridge.getIntent());
                         if (avatarHash) {
                             const idx = room.membership.findIndex((entry) => entry.avatar_hash === member.avatar_hash);

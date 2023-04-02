@@ -84,7 +84,7 @@ export class GatewayHandler {
                 ));
                 const room: IGatewayRoom = {
                     // Default to private
-                    allowHistory: HISTORY_SAFE_ENUMS.includes(historyVis ?.content ?.history_visibility || 'joined'),
+                    allowHistory: HISTORY_SAFE_ENUMS.includes(historyVis?.content?.history_visibility || 'joined'),
                     name: nameEv ? nameEv.content.name : "",
                     topic: topicEv ? topicEv.content.topic : "",
                     roomId,
@@ -256,7 +256,7 @@ export class GatewayHandler {
                     );
                 }
                 room = await this.getOrCreateGatewayRoom(data, roomId);
-                const canonAlias = room.remote ?.get<IChatJoinProperties>("properties").room_alias;
+                const canonAlias = room.remote?.get<IChatJoinProperties>("properties").room_alias;
                 if (canonAlias !== data.roomAlias) {
                     throw Error(
                         "We do not support multiple room aliases, try " + canonAlias,
@@ -268,7 +268,7 @@ export class GatewayHandler {
                 }
                 await this.purple.gateway.onRemoteJoin(null, data.join_id, vroom, intentUser);
             } catch (ex) {
-                const roomName = room ?.remote ?.get<string>("room_name");
+                const roomName = room?.remote?.get<string>("room_name");
                 // If the user is already in the room (e.g. XMPP member with a second device), don't part them.
                 const alreadyInRoom = roomName && this.purple.gateway.memberInRoom(roomName, intentUser);
                 if (roomId && !alreadyInRoom) {
@@ -348,8 +348,8 @@ export class GatewayHandler {
             ).toString("base64");
             // Check if we have bridged this already.
             const exists = (await this.store.getRoomEntryByMatrixId(roomId));
-            if (exists && !exists.remote ?.get<boolean>("gateway")) {
-                const roomName = exists.remote ?.get<string>("room_name");
+            if (exists && !exists.remote?.get<boolean>("gateway")) {
+                const roomName = exists.remote?.get<string>("room_name");
                 throw Error(`This room is already bridged to ${roomName}`);
             }
 
