@@ -99,6 +99,7 @@ export class ProfileSync {
                 }
             }
             await this.store.setMatrixUser(matrixUser);
+            return { matrixUser, remoteUser };
         } catch (ex) {
             log.error("updateProfile() Exception:", ex);
         }
