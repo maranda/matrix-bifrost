@@ -1,6 +1,6 @@
 import { IGatewayJoin, IGatewayRoomQuery, IGatewayPublicRoomsQuery, IChatJoinProperties } from "./bifrost/Events";
 import { IBifrostInstance } from "./bifrost/Instance";
-import { Bridge, Logging, Intent, MatrixUser, RoomBridgeStoreEntry, WeakEvent } from "matrix-appservice-bridge";
+import { Bridge, Logging, Intent, RoomBridgeStoreEntry, WeakEvent } from "matrix-appservice-bridge";
 import { Config } from "./Config";
 import { IStore } from "./store/Store";
 import { MROOM_TYPE_GROUP, IRemoteGroupData } from "./store/Types";
@@ -227,13 +227,12 @@ export class GatewayHandler {
             let roomId: string | null = null;
             let room: RoomBridgeStoreEntry | undefined;
             try {
-                let userProfile: { matrixUser: MatrixUser, remoteUser: BifrostRemoteUser };
                 if (this.config.getRoomRule(data.roomAlias) === "deny") {
                     throw Error("This room has been denied");
                 }
                 await intent.ensureRegistered();
                 if (this.config.tuning.waitOnProfileBeforeSend) {
-                    userProfile = await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
+                    await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
                 }
                 log.info(`Attempting to join ${data.roomAlias}`)
                 roomId = await intent.join(data.roomAlias);
@@ -241,7 +240,7 @@ export class GatewayHandler {
                     throw Error("This room has been denied");
                 }
                 if (!this.config.tuning.waitOnProfileBeforeSend) {
-                    userProfile = await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
+                    await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
                 }
                 room = await this.getOrCreateGatewayRoom(data, roomId);
                 const canonAlias = room.remote?.get<IChatJoinProperties>("properties").room_alias;
@@ -261,7 +260,7 @@ export class GatewayHandler {
                     // the server setting the global displayname.
                     setTimeout(
                         async () => {
-                            if (currentMembership?.displayname !== data.nick && userProfile?.matrixUser.getDisplayName() !== data.nick) {
+                            if (currentMembership?.displayname !== data.nick) {
                                 await intent.setRoomUserProfile(roomId, { displayname: data.nick }).catch((err) => {
                                     log.warn("Failed to set room user profile on join:", err);
                                 });
