@@ -243,21 +243,6 @@ export class GatewayHandler {
                 if (!this.config.tuning.waitOnProfileBeforeSend) {
                     userProfile = await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
                 }
-                if (data.nick) {
-                    // Set the user's displayname in the room to their nickname.
-                    // Do this after a short delay, so that we don't have a race on
-                    // the server setting the global displayname.
-                    setTimeout(
-                        async () => {
-                            if (userProfile?.matrixUser.getDisplayName() !== data.nick) {
-                                await intent.setRoomUserProfile(roomId, { displayname: data.nick }).catch((err) => {
-                                    log.warn("Failed to set room user profile on join:", err);
-                                });
-                            }
-                        },
-                        1000,
-                    );
-                }
                 room = await this.getOrCreateGatewayRoom(data, roomId);
                 const canonAlias = room.remote?.get<IChatJoinProperties>("properties").room_alias;
                 if (canonAlias !== data.roomAlias) {
@@ -268,6 +253,22 @@ export class GatewayHandler {
                 const vroom = await this.getVirtualRoom(roomId, intent);
                 if (!vroom) {
                     throw Error(`Failed to gather Virtual Room ${data.roomAlias} -> ${roomId}`);
+                }
+                if (data.nick) {
+                    const currentMembership = vroom.membership.find((ev) => ev.stateKey === intentUser);
+                    // Set the user's displayname in the room to their nickname.
+                    // Do this after a short delay, so that we don't have a race on
+                    // the server setting the global displayname.
+                    setTimeout(
+                        async () => {
+                            if (currentMembership?.displayname !== data.nick && userProfile?.matrixUser.getDisplayName() !== data.nick) {
+                                await intent.setRoomUserProfile(roomId, { displayname: data.nick }).catch((err) => {
+                                    log.warn("Failed to set room user profile on join:", err);
+                                });
+                            }
+                        },
+                        1000,
+                    );
                 }
                 await this.purple.gateway.onRemoteJoin(null, data.join_id, vroom, intentUser);
             } catch (ex) {
