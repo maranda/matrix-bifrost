@@ -382,11 +382,11 @@ export class XmppJsAccount implements IBifrostAccount {
         ];
     }
 
-    public async getUserInfo(who: string): Promise<IUserInfo> {
+    public async getUserInfo(who: string, nick?: string): Promise<IUserInfo> {
         const j = jid(who);
         const status = this.xmpp.presenceCache.getStatus(who);
         const ui: IUserInfo = {
-            Nickname: j.resource || j.local,
+            Nickname: nick || j.resource || j.local,
             eventName: "meh",
             who,
             account: {
