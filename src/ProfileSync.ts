@@ -19,6 +19,7 @@ export class ProfileSync {
         account: IProfileProvider,
         force: boolean = false,
         senderIdToLookup?: string,
+        nickname?: string
     ) {
         try {
             senderIdToLookup = senderIdToLookup ? senderIdToLookup : senderId;
@@ -48,7 +49,7 @@ export class ProfileSync {
             if (buddy === undefined) {
                 try {
                     log.info("Fetching user info for", senderIdToLookup);
-                    const uinfo = await account.getUserInfo(senderIdToLookup);
+                    const uinfo = await account.getUserInfo(senderIdToLookup, nickname);
                     log.debug("getUserInfo got:", uinfo);
                     remoteProfileSet.nick = uinfo.Nickname as string || uinfo["Display name"] as string;
                     if (uinfo.Avatar) {

@@ -5,9 +5,7 @@
 import { IBifrostAccount } from "./Account";
 import { IBasicProtocolMessage } from "../MessageFormatter";
 import { IPublicRoomsResponse } from "../MatrixTypes";
-import { BifrostProtocol } from "./Protocol";
-import { WeakEvent, Intent } from "matrix-appservice-bridge";
-import { IGatewayRoom } from "./Gateway";
+import { WeakEvent } from "matrix-appservice-bridge";
 
 export interface IChatJoinProperties {[key: string]: string; }
 

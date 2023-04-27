@@ -635,9 +635,9 @@ export class XmppJsGateway implements IGateway {
         }
     }
 
-    public async getUserInfo(who: string): Promise<IUserInfo> {
+    public async getUserInfo(who: string, nick?: string): Promise<IUserInfo> {
         const j = jid(who);
-        let nickname = j.resource || j.local;
+        let nickname = nick || j.resource || j.local;
         let photo: string|undefined;
         try {
             const res = await this.xmpp.getVCard(who) as Element;
@@ -650,7 +650,7 @@ export class XmppJsGateway implements IGateway {
             log.warn("Failed to fetch VCard", ex);
         }
         const ui: IUserInfo = {
-            Nickname: j.resource || j.local,
+            Nickname: nickname,
             Avatar: photo,
             eventName: "meh",
             who,

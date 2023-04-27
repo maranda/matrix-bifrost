@@ -1,0 +1,1 @@
+Fix nick changes on Gateway Joins

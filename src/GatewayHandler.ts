@@ -232,7 +232,7 @@ export class GatewayHandler {
                 }
                 await intent.ensureRegistered();
                 if (this.config.tuning.waitOnProfileBeforeSend) {
-                    await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
+                    await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway, undefined, undefined, data.nick);
                 }
                 log.info(`Attempting to join ${data.roomAlias}`)
                 roomId = await intent.join(data.roomAlias);
@@ -240,20 +240,7 @@ export class GatewayHandler {
                     throw Error("This room has been denied");
                 }
                 if (!this.config.tuning.waitOnProfileBeforeSend) {
-                    await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway);
-                }
-                if (data.nick) {
-                    // Set the user's displayname in the room to their nickname.
-                    // Do this after a short delay, so that we don't have a race on
-                    // the server setting the global displayname.
-                    setTimeout(
-                        async () => {
-                            await intent.setRoomUserProfile(roomId, { displayname: data.nick }).catch((err) => {
-                                log.warn("Failed to set room user profile on join:", err);
-                            });
-                        },
-                        1000,
-                    );
+                    await this.profileSync.updateProfile(protocol, data.sender, this.purple.gateway, undefined, undefined, data.nick);
                 }
                 room = await this.getOrCreateGatewayRoom(data, roomId);
                 const canonAlias = room.remote?.get<IChatJoinProperties>("properties").room_alias;
@@ -265,6 +252,23 @@ export class GatewayHandler {
                 const vroom = await this.getVirtualRoom(roomId, intent);
                 if (!vroom) {
                     throw Error(`Failed to gather Virtual Room ${data.roomAlias} -> ${roomId}`);
+                }
+                if (data.nick) {
+                    const currentMembership = vroom.membership.find((ev) => ev.stateKey === intentUser);
+                    log.info(`Current membership displayname vs nick: ${currentMembership?.displayname} -> ${data.nick}`);
+                    // Set the user's displayname in the room to their nickname.
+                    // Do this after a short delay, so that we don't have a race on
+                    // the server setting the global displayname.
+                    setTimeout(
+                        async () => {
+                            if (currentMembership?.displayname !== data.nick) {
+                                await intent.setRoomUserProfile(roomId, { displayname: data.nick }).catch((err) => {
+                                    log.warn("Failed to set room user profile on join:", err);
+                                });
+                            }
+                        },
+                        1000,
+                    );
                 }
                 await this.purple.gateway.onRemoteJoin(null, data.join_id, vroom, intentUser);
             } catch (ex) {

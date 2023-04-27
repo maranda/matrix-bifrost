@@ -10,7 +10,7 @@ export interface IChatJoinOptions {
 }
 
 export interface IProfileProvider {
-    getUserInfo(who: string): Promise<IUserInfo>;
+    getUserInfo(who: string, nick?: string): Promise<IUserInfo>;
     getAvatarBuffer(uri: string, senderId: string): Promise<{type: string, data: Buffer}>;
 }
 
