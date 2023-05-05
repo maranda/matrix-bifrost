@@ -866,10 +866,10 @@ Say \`help\` for more commands.
             if (!this.bridge) {
                 throw Error('bridge is not defined yet')
             }
-            log.info(`Handling redaction for ${event.room_id}`);
             const isGateway: boolean = context.remote.get("gateway");
             const roomName: string = context.remote.get("room_name");
             const msg = MessageFormatter.matrixEventToBody(event as MatrixMessageEvent, this.config.bridge);
+            log.info(`Handling redaction for ${event.room_id} -> ID: ${msg.redacted.redact_id}, Reason: ${msg.redacted.reason}`);
             if (isGateway) {
                 try {
                     const originalEventSID = await this.store.getStanzaIdFromEvent(event.room_id, msg.redacted.redact_id);
@@ -890,7 +890,7 @@ Say \`help\` for more commands.
             try {
                 let originalSender: string;
                 if (!recipient) {
-                    const originalEvent = await this.bridge.getIntent().getEvent(event.room_id, event.redacts as string) as WeakEvent;
+                    const originalEvent = await this.bridge.getIntent().getEvent(event.room_id, msg.redacted.redact_id as string) as WeakEvent;
                     originalSender = originalEvent?.sender;
                 }
                 acct = (await this.getAccountForMxid(originalSender || event.sender, roomProtocol)).acct;
