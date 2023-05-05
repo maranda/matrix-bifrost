@@ -270,7 +270,7 @@ export class StzaMessage extends StzaBase {
         public messageType?: string,
     ) {
         super(from, to, undefined);
-        if (idOrMsg && idOrMsg.hasOwnProperty("body")) {
+        if (idOrMsg && (idOrMsg.hasOwnProperty("body") || idOrMsg.hasOwnProperty("redacted"))) {
             idOrMsg = idOrMsg as IBasicProtocolMessage;
             this.body = idOrMsg.body;
             if (idOrMsg.formatted) {
@@ -291,7 +291,7 @@ export class StzaMessage extends StzaBase {
             }
             this.originId = idOrMsg.origin_id;
             this.stanzaId = idOrMsg.stanza_id;
-        } else if (idOrMsg) {
+        } else if (typeof(idOrMsg) === "string") {
             this.id = idOrMsg as string;
         }
     }
