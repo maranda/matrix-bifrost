@@ -20,7 +20,7 @@ roomRules: []
 
 messageRules: []
 # - sender: "*"
-#   message: /.*http:\/\/spamurl.com.*/is
+#   message: ".*http:\\/\\/spamurl.com.*"
 #   action: deny
 
 datastore:
