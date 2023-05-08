@@ -788,7 +788,10 @@ Say \`help\` for more commands.
                 throw Error('Cannot handle message, remote or matrix not defined');
             }
             if (!this.bridge) {
-                throw Error('bridge is not defined yet')
+                throw Error('bridge is not defined yet');
+            }
+            if (this.config.getMessageRule(event as MatrixMessageEvent) === "deny") {
+                throw Error('Matrix event denied by message rules');
             }
             log.info(`Handling group message for ${event.room_id}`);
             const roomProtocol: string = context.remote.get("protocol_id");

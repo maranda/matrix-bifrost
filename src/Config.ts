@@ -5,6 +5,7 @@ import { Logging } from "matrix-appservice-bridge";
 import { PgDataStoreOpts } from "./store/postgres/PgDatastore";
 import { IAccountExtraConfig } from "./bifrost/Account";
 import { IPurpleBackendOpts } from "./purple/PurpleInstance";
+import { MatrixMessageEvent } from "./MatrixTypes";
 
 const log = Logging.get("Config");
 
@@ -20,6 +21,8 @@ export class Config {
     };
 
     public readonly roomRules: IConfigRoomRule[] = [];
+
+    public readonly messageRules: IConfigMessageRule[] = [];
 
     public readonly datastore: IConfigDatastore = {
         engine: "nedb",
@@ -84,6 +87,20 @@ export class Config {
         }
         const roomIdRule = this.roomRules.find((r) => r.room === roomIdOrAlias);
         return roomIdRule?.action || "allow";
+    }
+
+    public getMessageRule(event: MatrixMessageEvent) {
+        const testBody = event.content?.body as string;
+        if (testBody) {
+            const messageRule = this.messageRules.find((m) => {
+                const message = new RegExp(m.message, "is");
+                return testBody.match(message);
+            });
+            if (messageRule && (messageRule.sender === "*" || event.sender.match(new RegExp(messageRule.sender, "i")))) {
+                return messageRule.action || "allow";
+            }
+        }
+        return "allow";
     }
 
     /**
@@ -195,4 +212,19 @@ export interface IConfigRoomRule {
      * Should the room be allowed, or denied.
      */
     action: "allow"|"deny";
+}
+
+export interface IConfigMessageRule {
+    /**
+     * Sender pattern or "*"
+     */
+    sender: RegExp | "*";
+    /**
+     * Message pattern to match
+     */
+    message: RegExp;
+    /**
+     * Should the message be allowed, or denied.
+     */
+    action: "allow" | "deny";
 }

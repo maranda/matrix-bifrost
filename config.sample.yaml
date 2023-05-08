@@ -18,6 +18,11 @@ roomRules: []
 # - room: "!badroom:example.com"
 #   action: "deny"
 
+messageRules: []
+# - sender: "*"
+#   message: /.*http:\/\/spamurl.com.*/is
+#   action: deny
+
 datastore:
   # The datastore engine to use, either "nedb" or "postgres"
   engine: "postgres"
