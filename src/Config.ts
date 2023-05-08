@@ -218,11 +218,11 @@ export interface IConfigMessageRule {
     /**
      * Sender pattern or "*"
      */
-    sender: RegExp | "*";
+    sender: string | "*";
     /**
      * Message pattern to match
      */
-    message: RegExp;
+    message: string;
     /**
      * Should the message be allowed, or denied.
      */
