@@ -16,7 +16,7 @@ interface IRoomMembership {
 }
 
 const SYNC_RETRY_MS = 20000;
-const MAX_SYNCS = 8;
+const MAX_SYNCS = 50;
 const JOINLEAVE_TIMEOUT = 240000;
 
 export class RoomSync {
@@ -119,7 +119,12 @@ export class RoomSync {
                             continue;
                         }
                         if (!bot.isRemoteUser(userId)) {
-                            await this.syncMatrixUser(userId, roomId, room.remote, members[userId].display_name);
+                            try {
+                                await this.syncMatrixUser(userId, roomId, room.remote, members[userId].display_name);
+                            } catch(ex) {
+                                log.warn(`Failed to sync ${userId} in ${roomId} because of: ${ex}`);
+                                continue;
+                            }
                         }
                     }
                 } catch (ex) {
