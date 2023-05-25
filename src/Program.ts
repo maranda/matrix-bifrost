@@ -267,9 +267,6 @@ class Program {
             this.purple!, this.profileSync, this.store, this.cfg, this.deduplicator,
         );
         this.gatewayHandler = new GatewayHandler(purple, this.bridge, this.cfg, this.store, this.profileSync);
-        this.roomSync = new RoomSync(
-            purple, this.store, this.deduplicator, this.gatewayHandler, this.bridge.getIntent(),
-        );
         this.eventHandler = new MatrixEventHandler(
             purple, this.store, this.deduplicator, this.config, this.gatewayHandler,
         );
@@ -283,7 +280,9 @@ class Program {
                 purple,
             );
         }
-
+        this.roomSync = new RoomSync(
+            purple, this.store, this.deduplicator, this.gatewayHandler, this.bridge.getIntent(), autoReg || undefined
+        );
         this.eventHandler.setBridge(this.bridge, autoReg || undefined);
         this.roomHandler.setBridge(this.bridge);
         log.info("Bridge has started.");

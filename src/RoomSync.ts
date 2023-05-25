@@ -7,6 +7,8 @@ import { Util } from "./Util";
 import { Deduplicator } from "./Deduplicator";
 import { ProtoHacks } from "./ProtoHacks";
 import { GatewayHandler } from "./GatewayHandler";
+import { XmppJsInstance } from "./xmppjs/XJSInstance";
+import { AutoRegistration } from "./AutoRegistration";
 const log = Logging.get("RoomSync");
 
 interface IRoomMembership {
@@ -28,6 +30,7 @@ export class RoomSync {
         private deduplicator: Deduplicator,
         private gateway: GatewayHandler,
         private intent: any,
+        private autoReg?: AutoRegistration,
     ) {
         this.accountRoomMemberships = new Map();
         this.bifrost.on("account-signed-on", this.onAccountSignedin.bind(this));
@@ -143,10 +146,21 @@ export class RoomSync {
 
             // First get an account for this matrix user.
             const protocolId = remoteRoom.get<string>("protocol_id");
-            const remotes = await this.store.getAccountsForMatrixUser(userId, protocolId);
+            let remotes = await this.store.getAccountsForMatrixUser(userId, protocolId);
             if (remotes.length === 0) {
-                log.warn(`${userId} has no remote accounts matching the rooms protocol`);
-                return;
+                if (this.autoReg) {
+                    try {
+                        log.info(`autoregistering ${userId}...`);
+                        await this.autoReg.registerUser(protocolId, userId);
+                        remotes = await this.store.getAccountsForMatrixUser(userId, protocolId);
+                    } catch (ex) {
+                        log.error("Failed to auto register matrix account", ex);
+                        return;
+                    }
+                } else {
+                    log.warn(`${userId} has no remote accounts matching the rooms protocol`);
+                    return;
+                }
             }
             const remoteUser = remotes[0];
             log.info(`${remoteUser.id} will join ${remoteRoom.get("room_name")} on connection`);
