@@ -124,16 +124,15 @@ export class ServiceHandler {
                 id,
             }, x(type, {
                 xmlns,
-            },
+            }),
             x("error", {
                 type: "cancel",
                 code: "404",
-            },
-            x("item-not-found", {
+            }, x("item-not-found", {
                 xmlns: "urn:ietf:params:xml:ns:xmpp-stanzas",
             }),
             ),
-            )));
+            ));
     }
 
     private handleVersionRequest(to: string, from: string, id: string): Promise<void> {
