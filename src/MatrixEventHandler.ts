@@ -496,12 +496,19 @@ export class MatrixEventHandler {
                     log.debug("Got appropriate param set", paramSet);
                     if (paramSet != null) {
                         let roomExists = await this.store.getRoomEntryByMatrixId(event.room_id);
+                        let remoteExists = await this.store.getGroupRoomByRemoteData({
+                            protocol_id: protocol.id,
+                            room_name: `${paramSet.room}@${paramSet.server}`,
+                        });
                         if (roomExists) {
                             if (roomExists.matrix.get("type") !== MROOM_TYPE_GROUP) {
                                 throw new Error("Can only plumb group type rooms (at least 3 people including the Bot), not IM or Admin");
                             } else {
                                 throw new Error("Room already exists in the database");
                             }
+                        }
+                        if (remoteExists) {
+                            throw new Error("Remote room is already linked");
                         }
                         if (event.content.displayname) {
                             paramSet.handle = event.content.displayname as string;
