@@ -257,7 +257,7 @@ export class MAMHandler {
                 log.warn(`Failed to fetch ${request.roomId} state for MUC Nicks -> ${ex}`);
             });
             const membership: { displayname?: string, sender: string }[] =
-                state?.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
+                (state as unknown as WeakEvent[]).filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
                     {
                         displayname: Util.resourcePrep(e.content.displayname),
                         sender: e.sender,

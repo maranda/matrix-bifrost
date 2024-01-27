@@ -30,9 +30,9 @@ export interface IGatewayRoom {
     membership: {
         sender: string;
         stateKey: string;
-        displayname?: string;
-        avatar_hash?: string;
-        membership: string;
+        displayname?: string|unknown;
+        avatar_hash?: string|unknown;
+        membership: string|unknown;
         isRemote: boolean;
     }[];
     // remotes: string[];

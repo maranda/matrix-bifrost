@@ -346,7 +346,7 @@ export class MatrixEventHandler {
                     msgtype: "m.notice",
                     body,
                     format: "org.matrix.custom.html",
-                    formatted_body: marked(body),
+                    formatted_body: marked.parse(body),
                 });
             } else if (args[0] === "accounts" && args.length === 1) {
                 const users = await this.store.getRemoteUsersFromMxId(event.sender) || [];
@@ -368,7 +368,7 @@ export class MatrixEventHandler {
                     msgtype: "m.notice",
                     body,
                     format: "org.matrix.custom.html",
-                    formatted_body: marked(body),
+                    formatted_body: marked.parse(body),
                 });
             } else if (args[0] === "accounts" && args[1] === "add") {
                 try {
@@ -448,7 +448,7 @@ export class MatrixEventHandler {
                     msgtype: "m.notice",
                     body,
                     format: "org.matrix.custom.html",
-                    formatted_body: marked(body),
+                    formatted_body: marked.parse(body),
                 });
             } else {
                 await intent.sendMessage(event.room_id, {
@@ -568,7 +568,7 @@ export class MatrixEventHandler {
                     log.info(event.sender, "is unbridging", room_id);
                     try {
                         const roomCtx = await this.store.getRoomEntryByMatrixId(room_id);
-                        const state = await intent.roomState(room_id);
+                        const state = await intent.roomState(room_id) as WeakEvent[];
                         const props = roomCtx.remote.get<IChatJoinProperties>("properties");
                         const protocol_id = roomCtx.remote.get<string>("protocol_id");
                         let occupants = state.filter((e) => e.type === "m.room.member").map((e: WeakEvent) => (
@@ -586,7 +586,7 @@ export class MatrixEventHandler {
                                 if (!userId.isRemote) {
                                     log.info(`purging remote user from ${room_id} -> ${userId.stateKey}`);
                                     const getAcctRes = await this.getAccountForMxid(userId.stateKey, protocol.id);
-                                    await ProtoHacks.addJoinProps(protocol.id, props, userId.stateKey, userId.displayname || userId.stateKey);
+                                    await ProtoHacks.addJoinProps(protocol.id, props, userId.stateKey, (userId.displayname || userId.stateKey) as string);
                                     await getAcctRes.acct.rejectChat(props);
                                 } else {
                                     log.info(`purging matrix user from ${room_id} -> ${userId.stateKey}`);
@@ -595,7 +595,7 @@ export class MatrixEventHandler {
                                         log.debug("Failed to remove puppet:", err);
                                     }).finally(() => {
                                         if (data.length === 1) {
-                                            this.store.removeGhost(userId, protocol, data[0].username);
+                                            this.store.removeGhost(userId.stateKey, protocol, data[0].username);
                                         }
                                     });
                                 }
@@ -687,7 +687,7 @@ Say \`help\` for more commands.
                 msgtype: "m.notice",
                 body,
                 format: "org.matrix.custom.html",
-                formatted_body: marked(body),
+                formatted_body: marked.parse(body),
             });*/
         } catch (ex) {
             log.error("handleInviteForBot() exception:", ex);
@@ -1068,7 +1068,7 @@ E.g. \`${command} ${acct.protocol.id}\` ${required.join(" ")} ${optional.join(" 
                     msgtype: "m.notice",
                     body,
                     format: "org.matrix.custom.html",
-                    formatted_body: marked(body),
+                    formatted_body: marked.parse(body),
                 });
                 return null;
             }

@@ -709,7 +709,6 @@ export class MatrixRoomHandler {
                 }
                 if (!currentData || (Buffer.compare(currentData, data.buffer) !== 0)) {
                     const mxcurl = await intent.uploadContent(data.buffer, {
-                        includeFilename: false,
                         type: data.conv.avatar_type,
                     });
                     intent.setRoomAvatar(roomId, mxcurl).catch((err) => {

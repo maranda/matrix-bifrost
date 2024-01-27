@@ -731,9 +731,9 @@ export class XmppJsGateway implements IGateway {
                 }
                 if (member.membership === "join") {
                     joined++;
-                    let avatarHash: string = member.avatar_hash;
+                    let avatarHash: string = member.avatar_hash ? member.avatar_hash as string : null;
                     if (avatarHash?.match(REGEXP_MXC)) {
-                        avatarHash = await ProtoHacks.getAvatarHash(member.stateKey, member.avatar_hash, this.bridge.getIntent());
+                        avatarHash = await ProtoHacks.getAvatarHash(member.stateKey, (member.avatar_hash ? member.avatar_hash as string : null), this.bridge.getIntent());
                         if (avatarHash) {
                             const idx = room.membership.findIndex((entry) => entry.avatar_hash === member.avatar_hash);
                             room.membership[idx].avatar_hash = avatarHash;

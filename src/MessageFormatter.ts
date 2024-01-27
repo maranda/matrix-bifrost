@@ -162,7 +162,6 @@ export class MessageFormatter {
 
                 log.info(`Uploading ${attachment.uri}...`);
                 const mxcurl = await intent.uploadContent(file.data, {
-                    includeFilename: false,
                     type: attachment.mimetype || "application/octect-stream",
                 });
                 matrixMsg.url = mxcurl;

@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "incremental": true,
-    "target": "ES2019",
+    "target": "es2019",
     "module": "commonjs",
     "allowJs": false,
     "declaration": false,
@@ -11,7 +11,8 @@
     "esModuleInterop": true,
     // TODO: Enable these
     "strict": false,
-    "strictNullChecks": false
+    "strictNullChecks": false,
+    "skipLibCheck": true
   },
   "include": [
     "src/**/*"

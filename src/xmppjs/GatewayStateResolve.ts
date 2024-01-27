@@ -69,7 +69,7 @@ export class GatewayStateResolve {
             // Get room membership to fetch the avatar hash
             const roomMembership = room.membership.find((e) => e.stateKey === event.state_key);
             // Matrix Join
-            members.addMatrixMember(chatName, event.state_key, jid(from), roomMembership.avatar_hash);
+            members.addMatrixMember(chatName, event.state_key, jid(from), (roomMembership.avatar_hash ? roomMembership.avatar_hash as string : null));
             // Reflect to all
             stanzas = sendToAllDevices(
                 new StzaPresenceItem(
@@ -81,7 +81,7 @@ export class GatewayStateResolve {
                     null,
                     null,
                     null,
-                    roomMembership.avatar_hash,
+                    (roomMembership.avatar_hash ? roomMembership.avatar_hash as string : null),
                 ), allDevices,
             );
         } else if (membership === "leave" && event.state_key === event.sender) {

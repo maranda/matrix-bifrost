@@ -62,7 +62,7 @@ export class GatewayHandler {
         const promise = (async () => {
             try {
                 log.debug(`Getting state for ${roomId}`);
-                const state = await intent.roomState(roomId);
+                const state = await intent.roomState(roomId) as WeakEvent[];
                 log.debug(`Got state for ${roomId}`);
                 const encryptedEv = state.find((e) => e.type === "m.room.encrypted");
                 if (encryptedEv) {
@@ -84,9 +84,9 @@ export class GatewayHandler {
                 ));
                 const room: IGatewayRoom = {
                     // Default to private
-                    allowHistory: HISTORY_SAFE_ENUMS.includes(historyVis?.content?.history_visibility || 'joined'),
-                    name: nameEv ? nameEv.content.name : "",
-                    topic: topicEv ? topicEv.content.topic : "",
+                    allowHistory: HISTORY_SAFE_ENUMS.includes((historyVis?.content?.history_visibility || 'joined') as string),
+                    name: (nameEv ? nameEv.content.name as string : ""),
+                    topic: (topicEv ? topicEv.content.topic as string : ""),
                     roomId,
                     membership,
                 };

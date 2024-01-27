@@ -108,7 +108,7 @@ export class RoomSync {
                         this.gateway.initialMembershipSync(room);
                         return;
                     }
-                    let members: { [userId: string]: { display_name: string } };
+                    let members: { [userId: string]: { display_name?: string } };
                     try {
                         members = await this.getJoinedMembers(bot, roomId);
                     } catch (ex) {
